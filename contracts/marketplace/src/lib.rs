@@ -940,6 +940,28 @@ impl Marketplace {
         result
     }
 
+    /// Returns all active offer IDs from the global index (non-paginated).
+    ///
+    /// WARNING: This reads the entire `ActiveOffers` vector into memory.
+    /// For large marketplaces, prefer `get_active_offers_paginated` which
+    /// returns a bounded slice and filters out expired entries.
+    pub fn get_active_offers(env: Env) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ActiveOffers)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Paginated variant of `get_active_offers`.
+    ///
+    /// Reads the global `ActiveOffers` index, filters out expired offers,
+    /// and returns a single page of results.  Page size is capped at 50.
+    ///
+    /// `page` is 0-indexed.  `page_size` is clamped to 50.
+    pub fn get_active_offers_paginated(env: Env, page: u32, page_size: u32) -> Vec<u64> {
+        Self::list_active_offers(env, page, page_size)
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     fn next_id(env: &Env) -> Result<u64, MarketplaceError> {
@@ -1809,6 +1831,62 @@ mod tests {
         let (client, _seller, _admin, _registry, _credit_id) = setup_with_registry(&env);
         // With no offers, page_size=100 should return empty (capped at 50, but still 0 items)
         let result = client.list_active_offers(&0, &100);
+        assert_eq!(result.len(), 0);
+    }
+
+    // ── Issue #497: get_active_offers / get_active_offers_paginated tests ────
+
+    #[test]
+    fn test_get_active_offers_returns_all_ids() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry, credit_id) = setup_with_registry(&env);
+        let seller_nonce = client.get_nonce(&seller);
+        let offer_id = client.create_offer(
+            &seller,
+            &credit_id,
+            &10_000_000,
+            &500_000,
+            &registry.id,
+            &None,
+            &seller_nonce,
+        );
+        let all = client.get_active_offers();
+        // Should contain the newly created offer
+        assert_eq!(all.len(), 1);
+        assert_eq!(all.get(0).unwrap(), offer_id);
+    }
+
+    #[test]
+    fn test_get_active_offers_paginated_returns_first_page() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry, credit_id) = setup_with_registry(&env);
+        let seller_nonce = client.get_nonce(&seller);
+        let offer_id = client.create_offer(
+            &seller,
+            &credit_id,
+            &10_000_000,
+            &500_000,
+            &registry.id,
+            &None,
+            &seller_nonce,
+        );
+        let page0 = client.get_active_offers_paginated(&0, &50);
+        assert_eq!(page0.len(), 1);
+        assert_eq!(page0.get(0).unwrap(), offer_id);
+        // page 1 should be empty
+        let page1 = client.get_active_offers_paginated(&1, &50);
+        assert_eq!(page1.len(), 0);
+    }
+
+    #[test]
+    fn test_get_active_offers_paginated_page_size_capped() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _seller, _admin, _registry, _credit_id) = setup_with_registry(&env);
+        // page_size=100 should be capped to 50 (but still 0 items with no offers)
+        let result = client.get_active_offers_paginated(&0, &100);
         assert_eq!(result.len(), 0);
     }
 
