@@ -119,7 +119,9 @@ export class RetirementController {
       tonnes: retirement.tonnes_retired,
       reason: retirement.reason,
       timestamp: retirement.retired_at,
-      ...(retirement.vintage_year ? { vintageYear: retirement.vintage_year } : {}),
+      ...(retirement.vintage_year
+        ? { vintageYear: retirement.vintage_year }
+        : {}),
     });
 
     return new StreamableFile(pdfBuffer, {

@@ -35,25 +35,40 @@ describe('MarketplaceComponent', () => {
 
   function buildApiMock() {
     return {
-      getListings: vi.fn().mockReturnValue(of(MOCK_OFFERS)),
+      getListingsCursor: vi.fn().mockImplementation((params: Record<string, string> = {}) => {
+        const data = MOCK_OFFERS.filter(
+          (o) => !params['methodology'] || o.methodology === params['methodology'],
+        );
+        return of({ data, next_cursor: null });
+      }),
       createOffer: vi.fn().mockReturnValue(of({ offerId: 'new-offer' })),
     };
   }
 
   const authMock = {
-    isAuthenticated: signal(true).asReadonly(),
-    token: signal('jwt-token').asReadonly(),
+    isAuthenticated: signal(true),
+    token: signal('jwt-token'),
+    authState: signal('authenticated' as const),
+    authError: signal<string | null>(null),
+    logout: vi.fn(),
   };
 
   const walletMock = {
-    publicKey: signal<string | null>('GPUBKEY').asReadonly(),
-    getNetworkDetails: vi.fn().mockResolvedValue({ networkPassphrase: 'Test SDF Network ; September 2015' }),
+    publicKey: signal<string | null>('GPUBKEY'),
+    isConnected: signal(true).asReadonly(),
+    state: signal('connected' as const).asReadonly(),
+    startBalancePolling: vi.fn(),
+    stopBalancePolling: vi.fn(),
+    getNetworkDetails: vi
+      .fn()
+      .mockResolvedValue({ networkPassphrase: 'Test SDF Network ; September 2015' }),
   };
 
   beforeEach(async () => {
     apiMock = buildApiMock();
     toastMock = { show: vi.fn() };
 
+    TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [MarketplaceComponent],
       providers: [
@@ -78,17 +93,18 @@ describe('MarketplaceComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(apiMock.getListings).toHaveBeenCalledTimes(1);
+    expect(apiMock.getListingsCursor).toHaveBeenCalledTimes(1);
   });
 
-  it('renders only open offers in the table', async () => {
+  it('renders the returned offers in the table', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const rows = fixture.nativeElement.querySelectorAll('tbody tr') as NodeListOf<HTMLTableRowElement>;
-    // MOCK_OFFERS has 2 open and 1 filled; filter shows only open
-    expect(rows.length).toBe(2);
+    const rows = fixture.nativeElement.querySelectorAll(
+      'tbody tr',
+    ) as NodeListOf<HTMLTableRowElement>;
+    expect(rows.length).toBe(3);
   });
 
   it('shows all required columns in the header', async () => {
@@ -96,7 +112,8 @@ describe('MarketplaceComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const headerText = (fixture.nativeElement.querySelector('thead') as HTMLElement).textContent ?? '';
+    const headerText =
+      (fixture.nativeElement.querySelector('thead') as HTMLElement).textContent ?? '';
     expect(headerText).toContain('Credit ID');
     expect(headerText).toContain('Project');
     expect(headerText).toContain('Vintage');
@@ -108,22 +125,16 @@ describe('MarketplaceComponent', () => {
   });
 
   it('shows loading skeleton while fetching', () => {
-    // Keep loading true by returning a never-resolving observable wrapper
-    let resolve!: (v: Offer[]) => void;
-    const pending = new Promise<Offer[]>((r) => (resolve = r));
-    apiMock.getListings.mockReturnValue({ subscribe: (obs: any) => { pending.then((v) => obs.next(v)).catch(() => {}); return { unsubscribe: () => {} }; } });
-
-    // Don't wait — just check during loading
     component.isLoading.set(true);
     fixture.detectChanges();
 
     const skeleton = fixture.nativeElement.querySelector('.skeleton-wrapper') as HTMLElement;
     expect(skeleton).toBeTruthy();
-    resolve([]); // cleanup
+    component.isLoading.set(false); // cleanup
   });
 
   it('shows error toast and message on API failure', async () => {
-    apiMock.getListings.mockReturnValue(throwError(() => new Error('Network error')));
+    apiMock.getListingsCursor.mockReturnValue(throwError(() => new Error('Network error')));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -133,7 +144,7 @@ describe('MarketplaceComponent', () => {
     expect(text).toContain('Network error');
   });
 
-  it('filters by methodology', async () => {
+  it('filters by methodology via the API', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -141,9 +152,12 @@ describe('MarketplaceComponent', () => {
     component.filters.methodology = 'REDD+';
     component.applyFilters();
     fixture.detectChanges();
+    await fixture.whenStable();
 
-    const rows = fixture.nativeElement.querySelectorAll('tbody tr') as NodeListOf<HTMLTableRowElement>;
-    expect(rows.length).toBe(1);
+    expect(apiMock.getListingsCursor).toHaveBeenCalledWith(
+      expect.objectContaining({ methodology: 'REDD+' }),
+    );
+    expect(component.visibleOffers().length).toBe(1);
   });
 
   it('resets filters correctly', async () => {
@@ -154,11 +168,13 @@ describe('MarketplaceComponent', () => {
     component.filters.methodology = 'REDD+';
     component.applyFilters();
     fixture.detectChanges();
-    expect(component.filteredOffers().length).toBe(1);
+    await fixture.whenStable();
+    expect(component.visibleOffers().length).toBe(1);
 
     component.resetFilters();
     fixture.detectChanges();
-    expect(component.filteredOffers().length).toBe(2); // 2 open offers
+    await fixture.whenStable();
+    expect(component.visibleOffers().length).toBe(3);
   });
 
   it('hasActiveFilters returns true when filters are set', () => {
@@ -173,35 +189,36 @@ describe('MarketplaceComponent', () => {
     expect(component.hasActiveFilters()).toBe(false);
   });
 
-  it('pagination: nextPage and prevPage update currentPage', async () => {
-    // Create 12 open offers to get 2 pages
-    const manyOffers = Array.from({ length: 12 }, (_, i) => makeOffer({ id: String(i) }));
-    apiMock.getListings.mockReturnValue(of(manyOffers));
+  it('loadMore appends the next cursor page', async () => {
+    apiMock.getListingsCursor
+      .mockReturnValueOnce(of({ data: MOCK_OFFERS.slice(0, 2), next_cursor: 'cursor-2' }))
+      .mockReturnValueOnce(of({ data: [makeOffer({ id: '9' })], next_cursor: null }));
 
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.currentPage()).toBe(0);
-    component.nextPage();
-    expect(component.currentPage()).toBe(1);
-    component.prevPage();
-    expect(component.currentPage()).toBe(0);
+    expect(component.visibleOffers().length).toBe(2);
+    expect(component.hasMore()).toBe(true);
+
+    await component.loadMore();
+
+    expect(component.visibleOffers().length).toBe(3);
+    expect(component.hasMore()).toBe(false);
+    expect(apiMock.getListingsCursor).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'cursor-2' }),
+    );
   });
 
-  it('prevPage does not go below 0', () => {
-    expect(component.currentPage()).toBe(0);
-    component.prevPage();
-    expect(component.currentPage()).toBe(0);
-  });
-
-  it('nextPage does not exceed totalPages - 1', async () => {
+  it('loadMore is a no-op when there is no cursor', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
-    const total = component.totalPages();
-    component.currentPage.set(total - 1);
-    component.nextPage();
-    expect(component.currentPage()).toBe(total - 1);
+    fixture.detectChanges();
+
+    expect(component.hasMore()).toBe(false);
+    await component.loadMore();
+
+    expect(apiMock.getListingsCursor).toHaveBeenCalledTimes(1);
   });
 
   it('buy() calls createOffer and shows success toast', async () => {
@@ -228,14 +245,7 @@ describe('MarketplaceComponent', () => {
   });
 
   it('buy() shows error toast when wallet not connected', async () => {
-    const noWalletMock = {
-      publicKey: signal<string | null>(null).asReadonly(),
-      getNetworkDetails: vi.fn(),
-    };
-    TestBed.overrideProvider(StellarWalletService, { useValue: noWalletMock });
-
-    fixture = TestBed.createComponent(MarketplaceComponent);
-    component = fixture.componentInstance;
+    walletMock.publicKey.set(null);
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -252,10 +262,7 @@ describe('MarketplaceComponent', () => {
   });
 
   it('shows auth prompt when not authenticated', () => {
-    TestBed.overrideProvider(AuthService, {
-      useValue: { isAuthenticated: signal(false), token: signal(null) },
-    });
-    fixture = TestBed.createComponent(MarketplaceComponent);
+    authMock.isAuthenticated.set(false);
     fixture.detectChanges();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';

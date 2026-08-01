@@ -5,10 +5,7 @@ import {
   provideHttpClient,
   withInterceptors,
 } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { authInterceptor } from './auth.interceptor';
@@ -18,9 +15,12 @@ import { ToastService } from '../services/toast.service';
 describe('authInterceptor (Issue #507)', () => {
   let http: HttpClient;
   let controller: HttpTestingController;
-  let mockAuth: jasmine.SpyObj<AuthService> & { token: ReturnType<typeof signal<string | null>> };
-  let mockToast: jasmine.SpyObj<ToastService>;
-  let mockRouter: jasmine.SpyObj<Router>;
+  let mockAuth: {
+    token: ReturnType<typeof signal<string | null>>;
+    clearSession: ReturnType<typeof vi.fn>;
+  };
+  let mockToast: { show: ReturnType<typeof vi.fn> };
+  let mockRouter: { navigate: ReturnType<typeof vi.fn> };
 
   const JWT = 'eyJhbGciOiJIUzI1NiJ9.test.sig';
 
@@ -29,12 +29,11 @@ describe('authInterceptor (Issue #507)', () => {
     const tokenSignal = signal<string | null>(JWT);
     mockAuth = {
       token: tokenSignal,
-      clearSession: jasmine.createSpy('clearSession'),
+      clearSession: vi.fn(),
     } as any;
 
-    mockToast = jasmine.createSpyObj('ToastService', ['show']);
-    mockRouter = jasmine.createSpyObj('Router', ['navigate']);
-    mockRouter.navigate.and.returnValue(Promise.resolve(true));
+    mockToast = { show: vi.fn() };
+    mockRouter = { navigate: vi.fn().mockResolvedValue(true) };
 
     TestBed.configureTestingModule({
       providers: [
@@ -63,16 +62,14 @@ describe('authInterceptor (Issue #507)', () => {
     mockAuth.token.set(null);
     http.get('/api/credits').subscribe();
     const req = controller.expectOne('/api/credits');
-    expect(req.request.headers.has('Authorization')).toBeFalse();
+    expect(req.request.headers.has('Authorization')).toBeFalsy();
     req.flush([]);
   });
 
   it('does not attach Authorization header to non-API requests', () => {
     http.get('https://horizon-testnet.stellar.org/accounts/G123').subscribe();
-    const req = controller.expectOne(
-      'https://horizon-testnet.stellar.org/accounts/G123',
-    );
-    expect(req.request.headers.has('Authorization')).toBeFalse();
+    const req = controller.expectOne('https://horizon-testnet.stellar.org/accounts/G123');
+    expect(req.request.headers.has('Authorization')).toBeFalsy();
     req.flush({});
   });
 
@@ -84,10 +81,7 @@ describe('authInterceptor (Issue #507)', () => {
       statusText: 'Unauthorized',
     });
     expect(mockAuth.clearSession).toHaveBeenCalled();
-    expect(mockToast.show).toHaveBeenCalledWith(
-      'Session expired, please reconnect',
-      'error',
-    );
+    expect(mockToast.show).toHaveBeenCalledWith('Session expired, please reconnect', 'error');
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/']);
   });
 

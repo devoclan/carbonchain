@@ -29,8 +29,7 @@ import { AppModule } from '../../src/app.module';
 import { StellarService } from '../../src/stellar/stellar.service';
 import { JwtAuthGuard } from '../../src/auth/jwt-auth.guard';
 
-const TEST_ACCOUNT =
-  'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX';
+const TEST_ACCOUNT = 'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX';
 
 class AllowAllGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
@@ -54,17 +53,17 @@ const SQL_INJECTION_PAYLOADS: string[] = [
   // UNION-based extraction
   "' UNION SELECT * FROM users--",
   "' UNION SELECT NULL, username, password FROM users--",
-  "1 UNION SELECT table_name FROM information_schema.tables--",
+  '1 UNION SELECT table_name FROM information_schema.tables--',
   // Tautology
-  "1=1",
-  "1 OR 1=1",
+  '1=1',
+  '1 OR 1=1',
   // Comment injection
   "VCS'--",
   "VCS'/*",
   // Stacked queries
   "VCS'; INSERT INTO credits VALUES ('evil','evil','evil')--",
   // Encoded variants
-  "%27%20OR%20%271%27%3D%271",
+  '%27%20OR%20%271%27%3D%271',
   // Time-based blind (PostgreSQL/MySQL)
   "'; SELECT pg_sleep(5)--",
   "1; WAITFOR DELAY '0:0:5'--",

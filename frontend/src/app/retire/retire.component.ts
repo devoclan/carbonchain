@@ -163,7 +163,7 @@ export type WizardStep = 1 | 2 | 3;
                 maxlength="200"
               ></textarea>
               <span id="reason-hint" class="hint">
-                {{ reasonControl.value?.length ?? 0 }}/200 characters
+                {{ reasonControl.value.length }}/200 characters
               </span>
               @if (reasonControl.invalid && (reasonControl.dirty || reasonControl.touched)) {
                 <span id="reason-error" class="field-error" role="alert">
@@ -173,9 +173,7 @@ export type WizardStep = 1 | 2 | 3;
             </label>
 
             <div class="step-actions">
-              <button class="btn btn-outline" type="button" (click)="goToStep(1)">
-                ← Back
-              </button>
+              <button class="btn btn-outline" type="button" (click)="goToStep(1)">← Back</button>
               <button
                 class="btn btn-primary"
                 type="button"
@@ -225,7 +223,12 @@ export type WizardStep = 1 | 2 | 3;
             </p>
 
             <div class="step-actions">
-              <button class="btn btn-outline" type="button" (click)="goToStep(2)" [disabled]="submitting()">
+              <button
+                class="btn btn-outline"
+                type="button"
+                (click)="goToStep(2)"
+                [disabled]="submitting()"
+              >
                 ← Back
               </button>
               <button
@@ -251,7 +254,9 @@ export type WizardStep = 1 | 2 | 3;
         margin: 0 auto;
         padding: 1.5rem 1rem;
       }
-      h1 { margin-bottom: 1.5rem; }
+      h1 {
+        margin-bottom: 1.5rem;
+      }
 
       .auth-prompt {
         display: flex;
@@ -276,8 +281,13 @@ export type WizardStep = 1 | 2 | 3;
         font-size: 0.85rem;
         color: #888;
       }
-      .step--active { color: #2e7d32; font-weight: 600; }
-      .step--done   { color: #4caf50; }
+      .step--active {
+        color: #2e7d32;
+        font-weight: 600;
+      }
+      .step--done {
+        color: #4caf50;
+      }
       .step__num {
         width: 24px;
         height: 24px;
@@ -298,8 +308,13 @@ export type WizardStep = 1 | 2 | 3;
       }
 
       /* Step panel */
-      .step-panel { margin-top: 0.5rem; }
-      .step-panel h2 { margin-bottom: 1rem; font-size: 1.1rem; }
+      .step-panel {
+        margin-top: 0.5rem;
+      }
+      .step-panel h2 {
+        margin-bottom: 1rem;
+        font-size: 1.1rem;
+      }
 
       /* Credit table */
       .credit-table {
@@ -314,11 +329,22 @@ export type WizardStep = 1 | 2 | 3;
         border-bottom: 1px solid #eee;
         text-align: left;
       }
-      .credit-table th { background: #f5f5f5; font-weight: 600; }
-      .credit-row { cursor: pointer; }
-      .credit-row:hover { background: #f9f9f9; }
-      .credit-row--selected { background: #e8f5e9; }
-      .credit-row:focus { outline: 2px solid #4caf50; }
+      .credit-table th {
+        background: #f5f5f5;
+        font-weight: 600;
+      }
+      .credit-row {
+        cursor: pointer;
+      }
+      .credit-row:hover {
+        background: #f9f9f9;
+      }
+      .credit-row--selected {
+        background: #e8f5e9;
+      }
+      .credit-row:focus {
+        outline: 2px solid #4caf50;
+      }
 
       /* Step 2 */
       .selected-summary {
@@ -344,9 +370,18 @@ export type WizardStep = 1 | 2 | 3;
         font-family: inherit;
         resize: vertical;
       }
-      textarea:focus { outline: 2px solid #4caf50; outline-offset: 1px; }
-      .hint { font-size: 0.78rem; color: #888; }
-      .field-error { font-size: 0.83rem; color: #e53935; }
+      textarea:focus {
+        outline: 2px solid #4caf50;
+        outline-offset: 1px;
+      }
+      .hint {
+        font-size: 0.78rem;
+        color: #888;
+      }
+      .field-error {
+        font-size: 0.83rem;
+        color: #e53935;
+      }
 
       /* Step 3 */
       .confirm-box {
@@ -363,8 +398,14 @@ export type WizardStep = 1 | 2 | 3;
         font-size: 0.9rem;
         margin: 0;
       }
-      dt { font-weight: 600; color: #555; }
-      .mono { font-family: monospace; word-break: break-all; }
+      dt {
+        font-weight: 600;
+        color: #555;
+      }
+      .mono {
+        font-family: monospace;
+        word-break: break-all;
+      }
       .sign-info {
         font-size: 0.85rem;
         color: #666;
@@ -382,11 +423,25 @@ export type WizardStep = 1 | 2 | 3;
         margin-top: 1.25rem;
         flex-wrap: wrap;
       }
-      .selection-hint { font-size: 0.85rem; color: #555; margin-bottom: 0.5rem; }
-      .credit-details { margin-top: 0.75rem; font-size: 0.85rem; }
-      .credit-details ul { margin: 0.25rem 0; padding-left: 1.25rem; }
-      .credit-details li { line-height: 1.6; }
-      .status { color: #888; }
+      .selection-hint {
+        font-size: 0.85rem;
+        color: #555;
+        margin-bottom: 0.5rem;
+      }
+      .credit-details {
+        margin-top: 0.75rem;
+        font-size: 0.85rem;
+      }
+      .credit-details ul {
+        margin: 0.25rem 0;
+        padding-left: 1.25rem;
+      }
+      .credit-details li {
+        line-height: 1.6;
+      }
+      .status {
+        color: #888;
+      }
       .btn {
         padding: 0.45rem 1.1rem;
         border-radius: 6px;
@@ -395,13 +450,35 @@ export type WizardStep = 1 | 2 | 3;
         font-size: 0.9rem;
         font-weight: 500;
       }
-      .btn:focus-visible { outline: 2px solid #4caf50; outline-offset: 2px; }
-      .btn-primary  { background: #4caf50; color: #fff; }
-      .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-      .btn-danger   { background: #e53935; color: #fff; }
-      .btn-danger:disabled  { opacity: 0.6; cursor: not-allowed; }
-      .btn-outline  { background: transparent; border: 1px solid #ccc; color: #333; }
-      .btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+      .btn:focus-visible {
+        outline: 2px solid #4caf50;
+        outline-offset: 2px;
+      }
+      .btn-primary {
+        background: #4caf50;
+        color: #fff;
+      }
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .btn-danger {
+        background: #e53935;
+        color: #fff;
+      }
+      .btn-danger:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .btn-outline {
+        background: transparent;
+        border: 1px solid #ccc;
+        color: #333;
+      }
+      .btn-outline:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
     `,
   ],
 })
@@ -425,17 +502,21 @@ export class RetireComponent implements OnInit {
 
   /** Only Active credits owned by the connected wallet. */
   readonly activeCredits = computed(() =>
-    this.store.credits().filter(
-      (c) => c.status === CreditStatus.Active && c.owner === this.wallet.publicKey(),
-    ),
+    this.store
+      .credits()
+      .filter((c) => c.status === CreditStatus.Active && c.owner === this.wallet.publicKey()),
   );
 
   readonly allSelected = computed(
-    () => this.activeCredits().length > 0 && this.selectedCredits().length === this.activeCredits().length,
+    () =>
+      this.activeCredits().length > 0 &&
+      this.selectedCredits().length === this.activeCredits().length,
   );
 
   readonly totalSelectedTonnes = computed(() =>
-    this.selectedCredits().reduce((sum, c) => sum + BigInt(c.tonnes), 0n).toString(),
+    this.selectedCredits()
+      .reduce((sum, c) => sum + BigInt(c.tonnes), 0n)
+      .toString(),
   );
 
   async ngOnInit(): Promise<void> {
@@ -451,9 +532,7 @@ export class RetireComponent implements OnInit {
   toggleCredit(credit: CreditMetadata): void {
     this.selectedCredits.update((list) => {
       const idx = list.findIndex((c) => c.id === credit.id);
-      return idx >= 0
-        ? [...list.slice(0, idx), ...list.slice(idx + 1)]
-        : [...list, credit];
+      return idx >= 0 ? [...list.slice(0, idx), ...list.slice(idx + 1)] : [...list, credit];
     });
   }
 
@@ -475,10 +554,14 @@ export class RetireComponent implements OnInit {
 
   stepLabel(step: number): string {
     switch (step) {
-      case 1: return 'Select Credits';
-      case 2: return 'Reason';
-      case 3: return 'Confirm';
-      default: return '';
+      case 1:
+        return 'Select Credits';
+      case 2:
+        return 'Reason';
+      case 3:
+        return 'Confirm';
+      default:
+        return '';
     }
   }
 
@@ -536,7 +619,9 @@ export class RetireComponent implements OnInit {
         }
 
         if (failed.length > 0) {
-          this.signingError.set(`${failed.length} credit(s) failed: ${failed.map((f) => f.reason).join(', ')}`);
+          this.signingError.set(
+            `${failed.length} credit(s) failed: ${failed.map((f) => f.reason).join(', ')}`,
+          );
         }
 
         if (succeeded.length > 0) {
@@ -586,21 +671,24 @@ export class RetireComponent implements OnInit {
   }
 
   get step(): { (): string; set: (s: string) => void } {
-    const self = this;
     const fn = () => {
-      const s = self.currentStep();
+      const s = this.currentStep();
       if (s === 1) return 'form';
       if (s === 2) return 'form';
       if (s === 3) return 'confirm';
       return 'form';
     };
     fn.set = (v: string) => {
-      if (v === 'form') self.currentStep.set(1);
-      else if (v === 'confirm') self.currentStep.set(3);
+      if (v === 'form') this.currentStep.set(1);
+      else if (v === 'confirm') this.currentStep.set(3);
     };
     return fn as any;
   }
 
-  retirementId(): string | null { return null; }
-  errorMsg(): string | null { return this.signingError(); }
+  retirementId(): string | null {
+    return null;
+  }
+  errorMsg(): string | null {
+    return this.signingError();
+  }
 }

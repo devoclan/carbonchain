@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Worker } from 'worker_threads';
 import { join } from 'path';
@@ -110,8 +114,7 @@ export class CertificateService {
         });
       } catch (err) {
         // DataCloneError (or any synchronous spawn error) — wrap and reject.
-        const detail =
-          err instanceof Error ? err.message : String(err);
+        const detail = err instanceof Error ? err.message : String(err);
         reject(
           new InternalServerErrorException({
             error: 'Certificate generation failed',
@@ -124,7 +127,11 @@ export class CertificateService {
       worker.once('message', (msg: { error?: string } | Buffer) => {
         // Issue #493 fix: pdf.worker.js may post { error: '...' } instead of
         // throwing, so the parent can reject the promise cleanly.
-        if (msg && !Buffer.isBuffer(msg) && typeof (msg as any).error === 'string') {
+        if (
+          msg &&
+          !Buffer.isBuffer(msg) &&
+          typeof (msg as any).error === 'string'
+        ) {
           reject(
             new InternalServerErrorException({
               error: 'Certificate generation failed',

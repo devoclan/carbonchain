@@ -913,13 +913,17 @@ impl Marketplace {
             .persistent()
             .get(&DataKey::ActiveOffers)
             .unwrap_or_else(|| Vec::new(&env));
-        
+
         let now = env.ledger().timestamp();
         let mut filtered: Vec<u64> = Vec::new(&env);
-        
+
         // Filter out expired offers
         for id in all.iter() {
-            if let Some(offer) = env.storage().persistent().get::<_, Offer>(&DataKey::Offer(id)) {
+            if let Some(offer) = env
+                .storage()
+                .persistent()
+                .get::<_, Offer>(&DataKey::Offer(id))
+            {
                 if offer.active {
                     let expired = offer.expires_at.is_some_and(|e| now > e);
                     if !expired {
@@ -928,7 +932,7 @@ impl Marketplace {
                 }
             }
         }
-        
+
         let start = (page as usize) * page_size;
         let mut result: Vec<u64> = Vec::new(&env);
         for i in start..(start + page_size) {
@@ -1895,7 +1899,7 @@ mod tests {
     /// Mock token contract that records calls and supports `balance` + `transfer`.
     /// Used exclusively in buy_offer tests.
     mod token_mock {
-        use soroban_sdk::{contract, contractimpl, Address, Env, Map};
+        use soroban_sdk::{contract, contractimpl, Address, Env};
 
         #[contract]
         pub struct MockToken;
@@ -1909,10 +1913,7 @@ mod tests {
 
             /// Native token `balance` interface.
             pub fn balance(env: Env, addr: Address) -> i128 {
-                env.storage()
-                    .persistent()
-                    .get(&addr)
-                    .unwrap_or(0i128)
+                env.storage().persistent().get(&addr).unwrap_or(0i128)
             }
 
             /// Native token `transfer` interface.
@@ -1952,8 +1953,7 @@ mod tests {
     fn test_buy_offer_insufficient_funds_returns_error() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, _admin, registry, credit_id, token) =
-            setup_with_token(&env);
+        let (client, seller, _admin, registry, credit_id, token) = setup_with_token(&env);
 
         // Seller creates offer at 10_000_000 stroops
         let seller_nonce = client.get_nonce(&seller);
@@ -1989,8 +1989,7 @@ mod tests {
     fn test_buy_offer_sufficient_funds_succeeds() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, _admin, registry, credit_id, token) =
-            setup_with_token(&env);
+        let (client, seller, _admin, registry, credit_id, token) = setup_with_token(&env);
 
         let price = 10_000_000i128;
 
@@ -2036,8 +2035,7 @@ mod tests {
     fn test_buy_offer_removes_from_active_index() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, _admin, registry, credit_id, token) =
-            setup_with_token(&env);
+        let (client, seller, _admin, registry, credit_id, token) = setup_with_token(&env);
 
         let price = 10_000_000i128;
         let seller_nonce = client.get_nonce(&seller);
@@ -2071,8 +2069,7 @@ mod tests {
     fn test_buy_offer_already_closed_fails() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, _admin, registry, credit_id, token) =
-            setup_with_token(&env);
+        let (client, seller, _admin, registry, credit_id, token) = setup_with_token(&env);
 
         let price = 10_000_000i128;
         let seller_nonce = client.get_nonce(&seller);
@@ -2090,25 +2087,14 @@ mod tests {
         let buyer1 = Address::generate(&env);
         token.set_balance(&buyer1, &price);
         let b1nonce = client.get_nonce(&buyer1);
-        client.buy_offer(
-            &buyer1,
-            &offer_id,
-            &registry.id,
-            &token.address,
-            &b1nonce,
-        );
+        client.buy_offer(&buyer1, &offer_id, &registry.id, &token.address, &b1nonce);
 
         // Second buyer tries to buy the same (now closed) offer
         let buyer2 = Address::generate(&env);
         token.set_balance(&buyer2, &price);
         let b2nonce = client.get_nonce(&buyer2);
-        let result = client.try_buy_offer(
-            &buyer2,
-            &offer_id,
-            &registry.id,
-            &token.address,
-            &b2nonce,
-        );
+        let result =
+            client.try_buy_offer(&buyer2, &offer_id, &registry.id, &token.address, &b2nonce);
         assert_eq!(result, Err(Ok(MarketplaceError::AlreadyClosed)));
     }
 
@@ -2116,8 +2102,7 @@ mod tests {
     fn test_buy_offer_expired_fails() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, _admin, registry, credit_id, token) =
-            setup_with_token(&env);
+        let (client, seller, _admin, registry, credit_id, token) = setup_with_token(&env);
 
         let now = env.ledger().timestamp();
         let expires_at = now + 100;
@@ -2162,15 +2147,14 @@ mod tests {
     fn test_list_active_offers_filters_expired() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, _admin, registry, credit_id, _token) =
-            setup_with_token(&env);
+        let (client, seller, _admin, registry, credit_id, _token) = setup_with_token(&env);
 
         let now = env.ledger().timestamp();
         let expires_at = now + 100;
 
         // Create offer with expiration
         let seller_nonce = client.get_nonce(&seller);
-        let offer_id = client.create_offer(
+        let _offer_id = client.create_offer(
             &seller,
             &credit_id,
             &10_000_000,

@@ -38,12 +38,12 @@ jobs:
       - name: Build Contracts (WASM)
         run: cd contracts && cargo build --target wasm32v1-none --release
       # #413 — cargo audit gate: fails the build on high-severity CVEs.
-      # Accepted advisories are listed in .cargo/audit.toml.
+      # Accepted advisories are listed in .cargo/audit.toml (auto-loaded from the
+      # repo root; `--config` was removed in cargo-audit 0.22).
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Run cargo audit
-        run: cd contracts && cargo audit --config ../.cargo/audit.toml
-            ${{ runner.os }}-cargo-
+        run: cargo audit -f contracts/Cargo.lock
       # Build WASM first — test_helpers.rs uses include_bytes! which requires the
       # wasm32v1-none artifact to exist before clippy or cargo test compiles test targets
       - name: Build Contracts
@@ -222,7 +222,7 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Run cargo audit
-        run: cd contracts && cargo audit --config ../.cargo/audit.toml
+        run: cargo audit -f contracts/Cargo.lock
 
   frontend:
     name: Frontend SPA (Angular)

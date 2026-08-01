@@ -5,7 +5,10 @@ import { VerifiersService } from './verifiers.service';
 import { VerifiersController } from './verifiers.controller';
 import { StellarModule } from '../stellar/stellar.module';
 import { VerifierEntity } from './verifier.entity';
-import { VerifierRepository, verifierRepositoryProvider } from './verifier.repository';
+import {
+  VerifierRepository,
+  verifierRepositoryProvider,
+} from './verifier.repository';
 
 @Module({
   imports: [
@@ -14,11 +17,7 @@ import { VerifierRepository, verifierRepositoryProvider } from './verifier.repos
     TypeOrmModule.forFeature([VerifierEntity]),
   ],
   controllers: [VerifiersController],
-  providers: [
-    VerifiersService,
-    VerifierRepository,
-    verifierRepositoryProvider,
-  ],
+  providers: [VerifiersService, VerifierRepository, verifierRepositoryProvider],
   exports: [VerifiersService],
 })
 export class VerifiersModule {}

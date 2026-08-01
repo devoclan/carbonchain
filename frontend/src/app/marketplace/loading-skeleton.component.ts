@@ -18,20 +18,30 @@ import { CommonModule } from '@angular/common';
       <div class="skeleton-card" *ngFor="let i of rows"></div>
     </div>
   `,
-  styles: [`
-    .skeleton-list { display: flex; flex-direction: column; gap: 12px; }
-    .skeleton-card {
-      height: 88px;
-      border-radius: 8px;
-      background: linear-gradient(90deg, #e8e8e8 25%, #f2f2f2 37%, #e8e8e8 63%);
-      background-size: 400% 100%;
-      animation: skeleton-shimmer 1.4s ease infinite;
-    }
-    @keyframes skeleton-shimmer {
-      0% { background-position: 100% 50%; }
-      100% { background-position: 0 50%; }
-    }
-  `],
+  styles: [
+    `
+      .skeleton-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .skeleton-card {
+        height: 88px;
+        border-radius: 8px;
+        background: linear-gradient(90deg, #e8e8e8 25%, #f2f2f2 37%, #e8e8e8 63%);
+        background-size: 400% 100%;
+        animation: skeleton-shimmer 1.4s ease infinite;
+      }
+      @keyframes skeleton-shimmer {
+        0% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0 50%;
+        }
+      }
+    `,
+  ],
 })
 export class MarketplaceLoadingSkeletonComponent {
   /** Number of placeholder rows to render while credits are loading. */

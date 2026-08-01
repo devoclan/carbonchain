@@ -86,7 +86,10 @@ describe('TransferCreditDto', () => {
   });
 
   it('rejects missing nonce', async () => {
-    const dto = plainToInstance(TransferCreditDto, { ...validPayload, nonce: undefined });
+    const dto = plainToInstance(TransferCreditDto, {
+      ...validPayload,
+      nonce: undefined,
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'nonce')).toBe(true);
   });
@@ -105,13 +108,19 @@ describe('SplitCreditDto', () => {
   });
 
   it('rejects empty splitTonnes', async () => {
-    const dto = plainToInstance(SplitCreditDto, { ...validPayload, splitTonnes: '' });
+    const dto = plainToInstance(SplitCreditDto, {
+      ...validPayload,
+      splitTonnes: '',
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'splitTonnes')).toBe(true);
   });
 
   it('rejects missing nonce', async () => {
-    const dto = plainToInstance(SplitCreditDto, { ...validPayload, nonce: undefined });
+    const dto = plainToInstance(SplitCreditDto, {
+      ...validPayload,
+      nonce: undefined,
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'nonce')).toBe(true);
   });

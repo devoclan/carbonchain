@@ -3,7 +3,6 @@ import { StreamableFile, NotFoundException } from '@nestjs/common';
 import { RetirementController } from './retirement.controller';
 import { RetirementService } from './retirement.service';
 import { CertificateService } from './certificate.service';
-import { NotFoundException } from '@nestjs/common';
 import { RetirementRecord } from '../../../shared';
 
 const mockRetirementService = {
@@ -59,9 +58,9 @@ describe('RetirementController', () => {
 
       expect(result).toBeInstanceOf(StreamableFile);
       // Verify the StreamableFile carries the correct metadata.
-      const options = (result as StreamableFile).getHeaders();
-      expect(options['content-type']).toBe('application/pdf');
-      expect(options['content-disposition']).toBe(
+      const options = result.getHeaders();
+      expect(options['type']).toBe('application/pdf');
+      expect(options['disposition']).toBe(
         `attachment; filename="retirement-certificate-${retirementId}.pdf"`,
       );
     });
@@ -100,10 +99,12 @@ describe('RetirementController', () => {
       // Service returns null to simulate a missing record.
       mockRetirementService.getRetirement.mockResolvedValueOnce(null);
 
-      await expect(controller.downloadCertificate(retirementId)).rejects.toThrow(
-        NotFoundException,
+      await expect(
+        controller.downloadCertificate(retirementId),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRetirementService.getRetirement).toHaveBeenCalledWith(
+        retirementId,
       );
-      expect(mockRetirementService.getRetirement).toHaveBeenCalledWith(retirementId);
       expect(mockCertificateService.generatePdf).not.toHaveBeenCalled();
     });
 
@@ -124,9 +125,9 @@ describe('RetirementController', () => {
         new Error('PDF generation failed'),
       );
 
-      await expect(controller.downloadCertificate(retirementId)).rejects.toThrow(
-        'PDF generation failed',
-      );
+      await expect(
+        controller.downloadCertificate(retirementId),
+      ).rejects.toThrow('PDF generation failed');
     });
 
     it('should not use @Res() — method signature has no Response parameter', () => {

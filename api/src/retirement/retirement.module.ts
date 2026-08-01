@@ -17,7 +17,11 @@ import { NonceService } from '../common/nonce.service';
 
 @Module({
   imports: [ConfigModule, StellarModule, AuthModule, CreditsModule],
-  controllers: [RetirementController, CreditRetirementController, CertificatesController],
+  controllers: [
+    RetirementController,
+    CreditRetirementController,
+    CertificatesController,
+  ],
   providers: [
     RetirementService,
     CertificateService,

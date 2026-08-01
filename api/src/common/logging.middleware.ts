@@ -31,14 +31,15 @@ export function sanitize(value: unknown, depth = 0): unknown {
 
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    result[k] = SENSITIVE_FIELD_PATTERN.test(k) ? '[REDACTED]' : sanitize(v, depth + 1);
+    result[k] = SENSITIVE_FIELD_PATTERN.test(k)
+      ? '[REDACTED]'
+      : sanitize(v, depth + 1);
   }
   return result;
 }
 
 interface AuthenticatedRequest extends Request {
   user?: { account?: string };
-  body?: unknown;
 }
 
 /**

@@ -140,11 +140,7 @@ export class CreditStore {
    * On success, replaces temporary IDs with real IDs from the API response.
    * On failure, rolls back the optimistic update and shows an error toast.
    */
-  async splitCredit(
-    creditId: string,
-    splitTonnes: string,
-    token: string,
-  ): Promise<void> {
+  async splitCredit(creditId: string, splitTonnes: string, token: string): Promise<void> {
     const parent = this._credits().find((c) => c.id === creditId);
     if (!parent) {
       this.toast.showError('Credit not found');
@@ -175,18 +171,14 @@ export class CreditStore {
     // Optimistic update: add children, mark parent as retired
     this._credits.update((list) => {
       return [
-        ...list.map((c) =>
-          c.id === creditId ? { ...c, status: CreditStatus.Retired } : c,
-        ),
+        ...list.map((c) => (c.id === creditId ? { ...c, status: CreditStatus.Retired } : c)),
         child1,
         child2,
       ];
     });
 
     try {
-      const response = await firstValueFrom(
-        this.api.splitCredit(creditId, splitTonnes, token),
-      );
+      const response = await firstValueFrom(this.api.splitCredit(creditId, splitTonnes, token));
 
       // Reconcile: replace temporary IDs with real IDs
       this._credits.update((list) =>
@@ -210,9 +202,7 @@ export class CreditStore {
       this._credits.update((list) =>
         list
           .filter((c) => c.id !== tempChild1Id && c.id !== tempChild2Id)
-          .map((c) =>
-            c.id === creditId ? { ...c, status: CreditStatus.Active } : c,
-          ),
+          .map((c) => (c.id === creditId ? { ...c, status: CreditStatus.Active } : c)),
       );
 
       const msg = err instanceof Error ? err.message : 'Failed to split credit.';

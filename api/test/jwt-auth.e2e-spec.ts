@@ -189,7 +189,7 @@ describe('JWT logout flow (issue #491)', () => {
     // (full verifyAndIssueToken requires a Stellar node)
     const jti = 'test-jti-uuid';
     const token = jwtService.sign({ account: 'GTEST', jti });
-    const decoded = jwtService.decode(token) as { jti?: string };
+    const decoded = jwtService.decode(token);
 
     expect(decoded.jti).toBe(jti);
   });

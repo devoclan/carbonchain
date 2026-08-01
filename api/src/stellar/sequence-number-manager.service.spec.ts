@@ -322,12 +322,14 @@ describe('SequenceNumberManager', () => {
     it('calls fetchFn exactly once even under concurrent cache-miss', async () => {
       // Cache is cold — all concurrent callers hit cache miss simultaneously.
       let fetchCount = 0;
-      const fetchFn = jest.fn<Promise<number>, []>().mockImplementation(async () => {
-        fetchCount++;
-        // Simulate async Horizon latency.
-        await new Promise((r) => setTimeout(r, 0));
-        return 200;
-      });
+      const fetchFn = jest
+        .fn<Promise<number>, []>()
+        .mockImplementation(async () => {
+          fetchCount++;
+          // Simulate async Horizon latency.
+          await new Promise((r) => setTimeout(r, 0));
+          return 200;
+        });
 
       const CONCURRENCY = 5;
       const results = await Promise.all(

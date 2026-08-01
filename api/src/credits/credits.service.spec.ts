@@ -257,7 +257,11 @@ describe('CreditsService.getCreditCount / listCreditsByOwner (issue #541)', () =
     const readContract = jest.fn().mockResolvedValue(null);
     const svc = buildSvc({ readContract });
 
-    await svc.listCreditsByOwner('GOWNER', 20, 10);
+    await svc.listCreditsByOwner(
+      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+      20,
+      10,
+    );
 
     expect(readContract).toHaveBeenCalledWith(
       expect.any(String),
@@ -268,7 +272,13 @@ describe('CreditsService.getCreditCount / listCreditsByOwner (issue #541)', () =
 
   it('listCreditsByOwner() returns an empty page when the contract has no value', async () => {
     const svc = buildSvc({ readContract: jest.fn().mockResolvedValue(null) });
-    await expect(svc.listCreditsByOwner('GOWNER', 0, 20)).resolves.toEqual({
+    await expect(
+      svc.listCreditsByOwner(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        0,
+        20,
+      ),
+    ).resolves.toEqual({
       data: [],
       offset: 0,
       limit: 20,
@@ -279,7 +289,13 @@ describe('CreditsService.getCreditCount / listCreditsByOwner (issue #541)', () =
     const svc = buildSvc({
       readContract: jest.fn().mockRejectedValue(new Error('rpc unavailable')),
     });
-    await expect(svc.listCreditsByOwner('GOWNER', 5, 15)).resolves.toEqual({
+    await expect(
+      svc.listCreditsByOwner(
+        'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+        5,
+        15,
+      ),
+    ).resolves.toEqual({
       data: [],
       offset: 5,
       limit: 15,

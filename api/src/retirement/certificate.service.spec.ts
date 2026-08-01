@@ -64,7 +64,7 @@ describe('CertificateService', () => {
       const result = await service.generateAndPin(SAMPLE_DATA);
 
       // PDF was generated.
-      expect(result.pdfBuffer).toBeInstanceOf(Buffer);
+      expect(result.pdfBuffer).toBeInstanceOf(Uint8Array);
       expect(result.pdfBuffer.length).toBeGreaterThan(0);
 
       // IPFS hash is null (Pinata unreachable — graceful degradation).
@@ -80,7 +80,7 @@ describe('CertificateService', () => {
       ok: false,
       status: 503,
       text: async () => 'Service Unavailable',
-    } as Response);
+    });
 
     try {
       const result = await service.generateAndPin(SAMPLE_DATA);
@@ -98,7 +98,7 @@ describe('CertificateService', () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ IpfsHash: expectedHash }),
-    } as unknown as Response);
+    });
 
     try {
       const result = await service.generateAndPin(SAMPLE_DATA);
@@ -112,15 +112,12 @@ describe('CertificateService', () => {
 
   it('generateAndPin propagates DataCloneError from worker as structured 500', async () => {
     // Build a data object with a non-cloneable property to trigger DataCloneError.
-    // In Node.js worker_threads, passing a function as workerData throws synchronously.
+    // worker_threads uses v8 serialization which tolerates circular references,
+    // but functions cannot be cloned — passing one as workerData throws synchronously.
     const badData: any = {
       ...SAMPLE_DATA,
-      // Symbol is not structured-cloneable in some environments
-      _circular: undefined as any,
+      callback: () => {},
     };
-
-    // Create a circular reference to force DataCloneError
-    badData._circular = badData;
 
     await expect(service.generateAndPin(badData)).rejects.toMatchObject({
       response: expect.objectContaining({

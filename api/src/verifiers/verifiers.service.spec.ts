@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { VerifiersService } from './verifiers.service';
 import { StellarService } from '../stellar/stellar.service';
 import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { CacheService } from '../common/cache.service';
+import { VERIFIER_REPOSITORY } from './verifier.repository';
 import { Keypair, xdr } from '@stellar/stellar-sdk';
 
 describe('VerifiersService.approveCredit', () => {
@@ -14,8 +19,10 @@ describe('VerifiersService.approveCredit', () => {
   let mockCacheService: jest.Mocked<Partial<CacheService>>;
 
   const CONTRACT_ID = 'CABC123';
-  const VERIFIER_ADDR = 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H';
-  const CREDIT_ID = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+  const VERIFIER_ADDR =
+    'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H';
+  const CREDIT_ID =
+    'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
 
   const testKeypair = () => Keypair.random();
 
@@ -45,6 +52,15 @@ describe('VerifiersService.approveCredit', () => {
         { provide: StellarService, useValue: mockStellarService },
         { provide: StellarKeypairService, useValue: mockKeypairService },
         { provide: CacheService, useValue: mockCacheService },
+        {
+          provide: VERIFIER_REPOSITORY,
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findByAddress: jest.fn().mockResolvedValue(null),
+            save: jest.fn(),
+            saveAll: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -53,7 +69,9 @@ describe('VerifiersService.approveCredit', () => {
 
   /** Spy on listVerifiers so we don't need ScVal mocks for the verifier lookup. */
   const spyListVerifiers = (addrs: string[]) =>
-    jest.spyOn(service, 'listVerifiers').mockResolvedValue(addrs.map((a) => ({ address: a })));
+    jest
+      .spyOn(service, 'listVerifiers')
+      .mockResolvedValue(addrs.map((a) => ({ address: a })));
 
   /** Setup nonce + invokeContract mocks that succeed. */
   const setupSuccess = () => {

@@ -33,11 +33,15 @@ describe('AuthService', () => {
 
     apiMock = {
       getChallenge: vi.fn().mockReturnValue(
-        of({ transaction: 'challengeXDR', network_passphrase: 'Test SDF Network ; September 2015' }),
+        of({
+          transaction: 'challengeXDR',
+          network_passphrase: 'Test SDF Network ; September 2015',
+        }),
       ),
       getToken: vi.fn().mockReturnValue(of({ access_token: 'mock.jwt.token' })),
     };
 
+    TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
         AuthService,
@@ -163,22 +167,27 @@ describe('AuthService', () => {
 describe('authInterceptor — JWT attachment', () => {
   let http: HttpClient;
   let controller: HttpTestingController;
+  let authMock: {
+    token: ReturnType<typeof signal<string | null>>;
+    isAuthenticated: ReturnType<typeof signal<boolean>>;
+    clearSession: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     sessionStorage.clear();
+    TestBed.resetTestingModule();
+
+    authMock = {
+      token: signal<string | null>('test-jwt-token'),
+      isAuthenticated: signal(true),
+      clearSession: vi.fn(),
+    };
 
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
-        {
-          provide: AuthService,
-          useValue: {
-            token: signal<string | null>('test-jwt-token'),
-            isAuthenticated: signal(true),
-            clearSession: vi.fn(),
-          },
-        },
+        { provide: AuthService, useValue: authMock },
         { provide: Router, useValue: { navigate: vi.fn() } },
         { provide: ToastService, useValue: { show: vi.fn() } },
       ],
@@ -202,13 +211,7 @@ describe('authInterceptor — JWT attachment', () => {
   });
 
   it('does not attach Authorization header when token is null', () => {
-    TestBed.overrideProvider(AuthService, {
-      useValue: {
-        token: signal<string | null>(null),
-        isAuthenticated: signal(false),
-        clearSession: vi.fn(),
-      },
-    });
+    authMock.token.set(null);
 
     http.get('/api/public').subscribe();
     const req = controller.expectOne('/api/public');

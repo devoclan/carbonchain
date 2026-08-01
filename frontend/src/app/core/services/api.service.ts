@@ -35,6 +35,7 @@ export interface AdminStats {
   totalCredits: number;
   totalRetirements: number;
   activeVerifiers: number;
+  paused: boolean;
 }
 
 export interface VerifierConfig {
@@ -43,7 +44,7 @@ export interface VerifierConfig {
 }
 
 export interface ProvenanceEvent {
-  event: string;
+  action: string;
   actor: string;
   timestamp: number;
   tx_hash?: string;
@@ -291,10 +292,7 @@ export class ApiService {
    * GET /admin/nonce/:address — fetch the current replay-protection nonce.
    * Must be called before every mutating admin action.
    */
-  getAdminNonce(
-    address: string,
-    token: string,
-  ): Observable<{ address: string; nonce: number }> {
+  getAdminNonce(address: string, token: string): Observable<{ address: string; nonce: number }> {
     return this.http.get<{ address: string; nonce: number }>(
       `${this.baseUrl}/admin/nonce/${address}`,
       { headers: this.authHeaders(token) },

@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   HttpException,
   HttpStatus,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request, Response } from 'express';
@@ -152,7 +153,10 @@ export class ThrottlerGuard implements CanActivate {
   private readonly store = new Map<string, HitRecord>();
   private readonly skipCidrs: CidrEntry[];
 
-  constructor(private readonly reflector: Reflector) {
+  constructor(
+    private readonly reflector: Reflector,
+    @Optional() private readonly cache?: CacheService,
+  ) {
     const raw = process.env['THROTTLER_SKIP_IPS'] ?? '';
     this.skipCidrs = raw
       .split(',')
@@ -162,6 +166,21 @@ export class ThrottlerGuard implements CanActivate {
       .filter((e): e is CidrEntry => e !== null);
   }
 
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const accountOptions: AccountThrottleOptions | undefined =
+      this.reflector.get<AccountThrottleOptions>(
+        ACCOUNT_THROTTLE_KEY,
+        context.getHandler(),
+      ) ??
+      this.reflector.get<AccountThrottleOptions>(
+        ACCOUNT_THROTTLE_KEY,
+        context.getClass(),
+      );
+
+    if (accountOptions) {
+      return this.checkAccountThrottle(context, accountOptions);
+    }
+
     const options: ThrottleOptions | undefined =
       this.reflector.get<ThrottleOptions>(THROTTLE_KEY, context.getHandler()) ??
       this.reflector.get<ThrottleOptions>(THROTTLE_KEY, context.getClass());
@@ -170,6 +189,14 @@ export class ThrottlerGuard implements CanActivate {
 
     return this.checkIpThrottle(context, options);
   }
+
+  private checkIpThrottle(
+    context: ExecutionContext,
+    options: ThrottleOptions,
+  ): boolean {
+    const req = context.switchToHttp().getRequest<Request>();
+    const res = context.switchToHttp().getResponse?.();
+    const ip = this.extractIp(req);
 
     // Silently bypass throttling for IPs in the skip list.
     // No bypass headers are written to avoid leaking the allowlist.
@@ -208,7 +235,7 @@ export class ThrottlerGuard implements CanActivate {
     options: AccountThrottleOptions,
   ): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
-    const res = context.switchToHttp().getResponse<Response>();
+    const res = context.switchToHttp().getResponse?.();
     const ip = this.extractIp(req);
     const ttlSeconds = Math.ceil(options.ttl / 1000);
 
@@ -341,12 +368,12 @@ export class ThrottlerGuard implements CanActivate {
         // Try testnet first, then public
         for (const passphrase of [Networks.TESTNET, Networks.PUBLIC]) {
           try {
-            const tx = new Transaction(body['transaction'] as string, passphrase);
+            const tx = new Transaction(body['transaction'], passphrase);
             const manageDataOp = tx.operations.find(
               (op: { type: string }) => op.type === 'manageData',
             );
-            if (manageDataOp && (manageDataOp as any).source) {
-              return (manageDataOp as any).source as string;
+            if (manageDataOp && manageDataOp.source) {
+              return manageDataOp.source as string;
             }
           } catch {
             // wrong network passphrase — try next

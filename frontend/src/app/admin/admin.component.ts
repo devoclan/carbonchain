@@ -24,8 +24,8 @@ import { ToastService } from '../core/services/toast.service';
       <section class="panel-section">
         <h2 class="section-title">Methodology Registration</h2>
         <p class="section-description">
-          Register a new carbon credit methodology. Credits submitted with this
-          methodology name will pass validation on the contract.
+          Register a new carbon credit methodology. Credits submitted with this methodology name
+          will pass validation on the contract.
         </p>
 
         @if (methodologyError()) {
@@ -84,8 +84,7 @@ import { ToastService } from '../core/services/toast.service';
       <section class="panel-section">
         <h2 class="section-title">Required Approvals</h2>
         <p class="section-description">
-          Set the minimum number of verifier approvals needed to mint a credit.
-          Valid range: 1 –
+          Set the minimum number of verifier approvals needed to mint a credit. Valid range: 1 –
           {{ maxApprovals() }}.
         </p>
 
@@ -122,19 +121,15 @@ import { ToastService } from '../core/services/toast.service';
       <section class="panel-section panel-section--danger">
         <h2 class="section-title section-title--danger">Contract Pause</h2>
         <p class="section-description">
-          Pause or resume all contract operations. When paused, no credits can be
-          issued, retired, or traded.
+          Pause or resume all contract operations. When paused, no credits can be issued, retired,
+          or traded.
         </p>
 
         @if (pauseError()) {
           <p class="alert alert--error" role="alert">{{ pauseError() }}</p>
         }
 
-        <button
-          class="btn btn-danger"
-          (click)="openPauseConfirm()"
-          [disabled]="isPausing()"
-        >
+        <button class="btn btn-danger" (click)="openPauseConfirm()" [disabled]="isPausing()">
           {{ contractPaused() ? 'Unpause Contract' : 'Pause Contract' }}
         </button>
       </section>
@@ -161,18 +156,10 @@ import { ToastService } from '../core/services/toast.service';
             {{ contractPaused() ? 'enabled' : 'disabled' }} immediately.
           </p>
           <div class="modal-actions">
-            <button
-              class="btn btn-ghost"
-              (click)="closePauseConfirm()"
-              [disabled]="isPausing()"
-            >
+            <button class="btn btn-ghost" (click)="closePauseConfirm()" [disabled]="isPausing()">
               Cancel
             </button>
-            <button
-              class="btn btn-danger"
-              (click)="confirmPause()"
-              [disabled]="isPausing()"
-            >
+            <button class="btn btn-danger" (click)="confirmPause()" [disabled]="isPausing()">
               {{ isPausing() ? 'Processing…' : 'I understand, proceed' }}
             </button>
           </div>
@@ -198,9 +185,7 @@ export class AdminComponent implements OnInit {
   protected methodologyDescription = '';
   protected readonly isRegisteringMethodology = signal(false);
   protected readonly methodologyError = signal<string | null>(null);
-  protected readonly registeredMethodologies = signal<
-    { name: string; description: string }[]
-  >([]);
+  protected readonly registeredMethodologies = signal<{ name: string; description: string }[]>([]);
 
   // ── Required approvals state ─────────────────────────────────────────────
   protected readonly requiredApprovals = signal(1);
@@ -271,13 +256,8 @@ export class AdminComponent implements OnInit {
     this.approvalsError.set(null);
     try {
       const token = this.auth.token()!;
-      await firstValueFrom(
-        this.api.setRequiredApprovals(this.requiredApprovals(), token),
-      );
-      this.toast.show(
-        `Required approvals set to ${this.requiredApprovals()}.`,
-        'success',
-      );
+      await firstValueFrom(this.api.setRequiredApprovals(this.requiredApprovals(), token));
+      this.toast.show(`Required approvals set to ${this.requiredApprovals()}.`, 'success');
     } catch (err) {
       this.approvalsError.set(
         err instanceof Error ? err.message : 'Failed to save approvals threshold.',
@@ -309,14 +289,14 @@ export class AdminComponent implements OnInit {
         : await firstValueFrom(this.api.pauseContract(token));
       this.contractPaused.set(result.paused);
       this.toast.show(
-        result.paused ? 'Contract paused. All operations stopped.' : 'Contract unpaused. Operations resumed.',
+        result.paused
+          ? 'Contract paused. All operations stopped.'
+          : 'Contract unpaused. Operations resumed.',
         'success',
       );
       this.showPauseConfirm.set(false);
     } catch (err) {
-      this.pauseError.set(
-        err instanceof Error ? err.message : 'Failed to toggle contract pause.',
-      );
+      this.pauseError.set(err instanceof Error ? err.message : 'Failed to toggle contract pause.');
     } finally {
       this.isPausing.set(false);
     }

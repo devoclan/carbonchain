@@ -11,7 +11,7 @@ import {
 import { StellarService } from '../stellar/stellar.service';
 import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { CacheService } from '../common/cache.service';
-import { MrvDataPoint } from '../../shared';
+import { MrvDataPoint } from '../../../shared';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -141,7 +141,9 @@ describe('OracleService', () => {
         mockStellarService.invokeContract.mock.calls[0][2];
       expect(args).toHaveLength(4);
       // The timestamp ScVal is the 4th argument (index 3)
-      const tsArg = args[3] as { value: () => { lo: () => number; hi: () => number } };
+      const tsArg = args[3] as {
+        value: () => { lo: () => number; hi: () => number };
+      };
       // Extract the numeric value — ScVal u64 stores as {lo, hi} pair
       // We check the type rather than exact value to avoid flakiness
       expect(tsArg).toBeDefined();
@@ -317,9 +319,8 @@ describe('OracleService', () => {
   describe('getAggregate', () => {
     it('returns zeroed aggregate for empty history', async () => {
       mockStellarService.readContract.mockResolvedValue([]);
-      const result: MrvAggregateResponse = await service.getAggregate(
-        'PROJ-EMPTY',
-      );
+      const result: MrvAggregateResponse =
+        await service.getAggregate('PROJ-EMPTY');
       expect(result.totalTonnes).toBe('0');
       expect(result.readingCount).toBe(0);
       expect(result.anomalyCount).toBe(0);
@@ -329,9 +330,18 @@ describe('OracleService', () => {
 
     it('computes correct totals across multiple readings', async () => {
       const cached: MrvDataPoint[] = [
-        makePoint({ tonnes_sequestered: '1000000', measurement_date: 1735689600 }),
-        makePoint({ tonnes_sequestered: '2000000', measurement_date: 1735776000 }),
-        makePoint({ tonnes_sequestered: '3000000', measurement_date: 1735862400 }),
+        makePoint({
+          tonnes_sequestered: '1000000',
+          measurement_date: 1735689600,
+        }),
+        makePoint({
+          tonnes_sequestered: '2000000',
+          measurement_date: 1735776000,
+        }),
+        makePoint({
+          tonnes_sequestered: '3000000',
+          measurement_date: 1735862400,
+        }),
       ];
       mockCacheService.get.mockResolvedValueOnce(null); // aggregate cache miss
       mockCacheService.get.mockResolvedValueOnce(cached); // history cache hit

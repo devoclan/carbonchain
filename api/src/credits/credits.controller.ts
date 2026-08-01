@@ -49,10 +49,10 @@ export class CreditsController {
   @ApiResponse({ status: 200, description: 'Returns credit metadata array' })
   @UseReplicaForRead()
   @Post('bulk')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }))
-  async getBulkCredits(
-    @Body() dto: BulkCreditsDto,
-  ): Promise<CreditMetadata[]> {
+  @UsePipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }),
+  )
+  async getBulkCredits(@Body() dto: BulkCreditsDto): Promise<CreditMetadata[]> {
     return this.creditsService.getBulkCredits(dto.ids);
   }
 

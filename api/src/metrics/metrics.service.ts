@@ -68,8 +68,8 @@ export class MetricsService implements OnModuleInit {
       labelNames: ['contract', 'method'],
       // Exponential-ish buckets: 100 → 10_000_000 stroops
       buckets: [
-        100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000,
-        250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000,
+        100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000,
+        500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000,
       ],
       registers: [this.register],
     });

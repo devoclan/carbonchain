@@ -12,7 +12,7 @@ import { nativeToScVal, scValToNative } from '@stellar/stellar-sdk';
 
 /**
  * AdminGuard - Verifies admin status against on-chain contract.
- * 
+ *
  * Security model:
  * - Checks JWT claim first (fast path)
  * - Verifies publicKey matches on-chain admin address from credit_registry.get_admin()
@@ -32,9 +32,9 @@ export class AdminGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<{ user?: { publicKey?: string; account?: string; role?: string } }>();
+    const request = context.switchToHttp().getRequest<{
+      user?: { publicKey?: string; account?: string; role?: string };
+    }>();
 
     // Step 1: Check JWT claim (fast path)
     if (request.user?.role !== 'admin') {
@@ -49,12 +49,14 @@ export class AdminGuard implements CanActivate {
 
     try {
       const onChainAdmin = await this.getOnChainAdmin();
-      
+
       if (userPublicKey !== onChainAdmin) {
         this.logger.warn(
           `Admin verification failed: JWT claims admin but publicKey ${userPublicKey} does not match on-chain admin ${onChainAdmin}`,
         );
-        throw new ForbiddenException('Admin verification failed - not authorized on-chain');
+        throw new ForbiddenException(
+          'Admin verification failed - not authorized on-chain',
+        );
       }
 
       this.logger.debug(`Admin verified: ${userPublicKey}`);
@@ -107,7 +109,11 @@ export class AdminGuard implements CanActivate {
     const adminAddress = scValToNative(result) as string;
 
     // Cache for 5 minutes
-    await this.cache.set(this.ADMIN_CACHE_KEY, adminAddress, this.ADMIN_CACHE_TTL);
+    await this.cache.set(
+      this.ADMIN_CACHE_KEY,
+      adminAddress,
+      this.ADMIN_CACHE_TTL,
+    );
 
     this.logger.debug(`Cached on-chain admin address: ${adminAddress}`);
     return adminAddress;

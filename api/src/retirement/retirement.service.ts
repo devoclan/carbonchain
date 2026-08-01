@@ -14,9 +14,9 @@ import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { nativeToScVal, scValToNative } from '@stellar/stellar-sdk';
 import { CreditStatus, RetirementRecord } from '../../../shared';
 import { RetirementEntity } from './retirement.entity';
+import { CertificateService } from './certificate.service';
 import type { IRetirementRepository } from './retirement.repository';
 import { RETIREMENT_REPOSITORY } from './retirement.repository';
-import { PageResult } from '../credits/credit.repository';
 import { NonceService } from '../common/nonce.service';
 import type { ICreditRepository } from '../credits/credit.repository';
 import { CREDIT_REPOSITORY, PageResult } from '../credits/credit.repository';
@@ -30,22 +30,6 @@ import type { RetirementCompletedEvent } from '../metrics/metrics-events';
 import type { EventEmitter } from 'events';
 
 export const MAX_BATCH_SIZE = 10;
-
-export class RetireDto {
-  buyerPublicKey: string;
-  creditId: string;
-  tonnes: string;
-  reason: string;
-  /** Optional nonce for API-layer replay-attack deduplication (#415). */
-  nonce?: string;
-}
-
-export class BatchRetireDto {
-  buyerPublicKey: string;
-  creditIds: string[];
-  tonnes: string[];
-  reason: string;
-}
 
 export interface BatchRetireResult {
   succeeded: string[];
@@ -101,9 +85,10 @@ export class RetirementService {
     @Inject(CREDIT_REPOSITORY)
     private readonly creditRepo: ICreditRepository,
     @Inject(EVENT_EMITTER) private readonly eventEmitter: IEventEmitter,
-    private readonly nonceService?: NonceService,
+    @Optional() private readonly nonceService?: NonceService,
     @Optional() private readonly certificateService?: CertificateService,
-    @Optional() @Inject(METRICS_EVENT_EMITTER)
+    @Optional()
+    @Inject(METRICS_EVENT_EMITTER)
     private readonly metricsEmitter?: EventEmitter,
   ) {
     this.retirementContractId = this.configService.get<string>(
@@ -176,7 +161,10 @@ export class RetirementService {
     // Claim the nonce in Redis before submitting the transaction on-chain.
     // A duplicate nonce within the Stellar ledger close window returns 409.
     if (dto.nonce !== undefined && this.nonceService) {
-      await this.nonceService.consumeNonce(dto.buyerPublicKey, dto.nonce);
+      await this.nonceService.consumeNonce(
+        dto.buyerPublicKey,
+        BigInt(dto.nonce),
+      );
     }
 
     const args = [
@@ -217,7 +205,7 @@ export class RetirementService {
         ).toString('hex')
       : 'unknown';
 
-    const txHash = (response as rpc.Api.GetTransactionResponse).hash || '';
+    const txHash = (response as unknown as { hash?: string })?.hash ?? '';
 
     // ── Step 1: Persist to off-chain index ───────────────────────────────────
     // The record MUST be written before the CreditRetired event is emitted.
@@ -230,7 +218,7 @@ export class RetirementService {
     entity.tonnesRetired = dto.tonnes;
     entity.reason = dto.reason;
     entity.retiredAt = Math.floor(Date.now() / 1000);
-    entity.txHash = '';
+    entity.txHash = txHash;
     // Issue #589 — persist vintage year for certificate provenance
     entity.vintageYear = dto.vintageYear ?? 0;
     await this.retirementRepo.save(entity);
@@ -290,7 +278,9 @@ export class RetirementService {
             'set_certificate_hash',
             [
               nativeToScVal(adminPublicKey, { type: 'address' }),
-              nativeToScVal(Buffer.from(retirementId, 'hex'), { type: 'bytes' }),
+              nativeToScVal(Buffer.from(retirementId, 'hex'), {
+                type: 'bytes',
+              }),
               nativeToScVal(certificateIpfsHash, { type: 'string' }),
               nativeToScVal(nonceValue, { type: 'u64' }),
             ],
@@ -299,7 +289,7 @@ export class RetirementService {
 
           // Persist the hash to the off-chain index so it is returned in
           // GET /certificates/:id without an additional on-chain read.
-          entity.certificateIpfsHash = certificateIpfsHash;
+          entity.certificateIpfsHash = certificateIpfsHash ?? '';
           await this.retirementRepo.save(entity);
 
           this.logger.log(
@@ -323,13 +313,10 @@ export class RetirementService {
     }
 
     // Issue #495 — emit retirement metric event (single retirement).
-    this.metricsEmitter?.emit(
-      RETIREMENT_COMPLETED,
-      {
-        type: 'single',
-        count: 1,
-      } satisfies RetirementCompletedEvent,
-    );
+    this.metricsEmitter?.emit(RETIREMENT_COMPLETED, {
+      type: 'single',
+      count: 1,
+    } satisfies RetirementCompletedEvent);
 
     return { retirementId, certificateIpfsHash: certificateIpfsHash ?? '' };
   }
@@ -365,12 +352,8 @@ export class RetirementService {
 
     const creditIdsVal = nativeToScVal(
       dto.creditIds.map((id) => Buffer.from(id, 'hex')),
-      { type: 'vec' },
     );
-    const tonnesVal = nativeToScVal(
-      dto.tonnes.map((t) => BigInt(t)),
-      { type: 'vec' },
-    );
+    const tonnesVal = nativeToScVal(dto.tonnes.map((t) => BigInt(t)));
     const args = [
       nativeToScVal(dto.buyerPublicKey, { type: 'address' }),
       creditIdsVal,
@@ -396,39 +379,31 @@ export class RetirementService {
           error: 'Contract is currently paused',
         });
       }
-      throw error;
+      // The whole batch reverted on-chain — no DB writes and no events.
+      // Surface every credit as failed so callers can reconcile.
+      this.logger.error(
+        `Batch retire contract call failed: ${msg}. No records persisted.`,
+      );
+      return {
+        succeeded: [],
+        failed: dto.creditIds.map((id) => ({
+          id,
+          reason: msg || 'Contract reverted',
+        })),
+      };
     }
 
     const rv = (response as unknown as Record<string, unknown>).returnValue;
-    const txHash = (response as rpc.Api.GetTransactionResponse).hash || '';
-    const retirementIds: string[] = rv
-      ? (scValToNative(rv as Parameters<typeof scValToNative>[0]) as Uint8Array[]).map(
-          (b) => Buffer.from(b).toString('hex'),
-        )
-      : [];
+    const txHash = (response as unknown as { hash?: string })?.hash ?? '';
 
-    // Persist batch retirement records with the batch transaction hash
-    const now = Math.floor(Date.now() / 1000);
-    for (const retirementId of retirementIds) {
-      const entity = new RetirementEntity();
-      entity.id = retirementId;
-      entity.creditId = '';
-      entity.buyer = dto.buyerPublicKey;
-      entity.tonnesRetired = '';
-      entity.reason = dto.reason;
-      entity.retiredAt = now;
-      entity.txHash = txHash;
-      await this.retirementRepo.save(entity);
-    }
-
-    return { retirementIds, txHash };
-
-    // The contract now returns BatchRetireResult { succeeded: Vec<BytesN<32>>, failed: Vec<{credit_id, error_code}> }
+    // The contract returns BatchRetireResult { succeeded: Vec<BytesN<32>>, failed: Vec<{credit_id, error_code}> }
     let succeededIds: string[] = [];
     let contractFailed: { id: string; reason: string }[] = [];
 
     if (rv) {
-      const native = scValToNative(rv as Parameters<typeof scValToNative>[0]) as {
+      const native = scValToNative(
+        rv as Parameters<typeof scValToNative>[0],
+      ) as {
         succeeded?: Uint8Array[];
         failed?: Array<{ credit_id: Uint8Array; error_code: number }>;
       };
@@ -464,7 +439,7 @@ export class RetirementService {
       entity.tonnesRetired = dto.tonnes[i] ?? '0';
       entity.reason = dto.reason;
       entity.retiredAt = now;
-      entity.txHash = '';
+      entity.txHash = txHash;
       return entity;
     });
 
@@ -508,13 +483,10 @@ export class RetirementService {
     // Issue #495 — emit batch retirement metric event.
     const successCount = succeeded.length;
     if (successCount > 0) {
-      this.metricsEmitter?.emit(
-        RETIREMENT_COMPLETED,
-        {
-          type: 'batch',
-          count: successCount,
-        } satisfies RetirementCompletedEvent,
-      );
+      this.metricsEmitter?.emit(RETIREMENT_COMPLETED, {
+        type: 'batch',
+        count: successCount,
+      } satisfies RetirementCompletedEvent);
     }
 
     // Merge contract-reported failures with any additional context
@@ -627,7 +599,8 @@ export class RetirementService {
         retired_at: retirement.retired_at,
         tx_hash: retirement.tx_hash || '',
         verified: true,
-        certificate_ipfs_hash: onChainIpfsHash ?? retirement.certificate_ipfs_hash ?? '',
+        certificate_ipfs_hash:
+          onChainIpfsHash ?? retirement.certificate_ipfs_hash ?? '',
       };
     } catch (error: unknown) {
       this.logger.error(

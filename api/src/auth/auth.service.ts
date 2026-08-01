@@ -202,11 +202,7 @@ export class AuthService {
 
     let payload: { jti?: string; exp?: number; iat?: number } | null = null;
     try {
-      payload = this.jwtService.decode(token) as {
-        jti?: string;
-        exp?: number;
-        iat?: number;
-      } | null;
+      payload = this.jwtService.decode(token);
     } catch {
       // malformed token — nothing to revoke
       return;
@@ -224,9 +220,7 @@ export class AuthService {
 
     const blocklistKey = `${BLOCKLIST_PREFIX}${payload.jti}`;
     await this.cache.set(blocklistKey, true, remainingTtl);
-    this.logger.log(
-      `JWT revoked: jti=${payload.jti}, TTL=${remainingTtl}s`,
-    );
+    this.logger.log(`JWT revoked: jti=${payload.jti}, TTL=${remainingTtl}s`);
   }
 
   /**

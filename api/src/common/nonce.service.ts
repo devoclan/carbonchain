@@ -1,10 +1,6 @@
-import {
-  Injectable,
-  Logger,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, Logger, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, RedisClientType } from 'redis';
+import Redis, { type Redis as RedisClient } from 'ioredis';
 
 /**
  * Stellar ledger close time in seconds — the window during which a nonce
@@ -42,7 +38,7 @@ export const nonceKey = (address: string, nonce: string | bigint): string =>
 @Injectable()
 export class NonceService {
   private readonly logger = new Logger(NonceService.name);
-  private client: RedisClientType | null = null;
+  private client: RedisClient | null = null;
   private connected = false;
 
   constructor(private readonly config: ConfigService) {}
@@ -58,11 +54,11 @@ export class NonceService {
     }
 
     try {
-      this.client = createClient({ url }) as RedisClientType;
+      this.client = new Redis(url);
       this.client.on('error', (err: Error) =>
         this.logger.error(`NonceService Redis error: ${err.message}`),
       );
-      await this.client.connect();
+      await this.client.ping();
       this.connected = true;
       this.logger.log(`NonceService connected to Redis at ${url}`);
     } catch (err) {
@@ -107,10 +103,7 @@ export class NonceService {
 
     try {
       // SET NX returns 'OK' on success and null when the key already exists.
-      const result = await this.client.set(key, '1', {
-        NX: true,
-        EX: ttlSeconds,
-      });
+      const result = await this.client.set(key, '1', 'EX', ttlSeconds, 'NX');
 
       if (result === null) {
         // Key already set — duplicate submission within TTL window

@@ -140,9 +140,7 @@ export class AdminService {
    * Set the required number of verifier approvals before a credit is minted.
    * `threshold` must be >= 1 and <= total registered verifier count.
    */
-  setRequiredApprovals(
-    threshold: number,
-  ): { requiredApprovals: number } {
+  setRequiredApprovals(threshold: number): { requiredApprovals: number } {
     return { requiredApprovals: threshold };
   }
 }

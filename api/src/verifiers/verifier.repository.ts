@@ -60,7 +60,9 @@ export class VerifierRepository implements IVerifierRepository {
    */
   async upsert(verifier: VerifierEntity): Promise<VerifierEntity> {
     await this.repo.upsert(verifier, ['address']);
-    return this.repo.findOne({ where: { address: verifier.address } }) as Promise<VerifierEntity>;
+    return this.repo.findOne({
+      where: { address: verifier.address },
+    }) as Promise<VerifierEntity>;
   }
 
   /** Remove a verifier from the off-chain index. */

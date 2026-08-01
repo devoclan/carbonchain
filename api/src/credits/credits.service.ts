@@ -17,18 +17,11 @@ import { CacheService } from '../common/cache.service';
 import { NonceService } from '../common/nonce.service';
 import { IssueCreditDto } from './dto/issue-credit.dto';
 
-// Re-export for backward compatibility with existing consumers
-// (CreditsController and tests that import IssueCreditDto from 'credits.service')
-export { IssueCreditDto } from './dto/issue-credit.dto';
-import { IssueCreditDto } from './dto/issue-credit.dto';
-
 // Cache key helpers
 const CREDIT_KEY = (id: string) => `credits:${id}`;
 const LIST_CREDITS_KEY = (filter: string) => `credits:list:${filter}`;
 const CREDIT_TTL = 120; // seconds
 
-// Re-export for backward compatibility with existing consumers
-export { IssueCreditDto } from './dto/issue-credit.dto';
 // Cache tags — issue #540: targeted invalidation instead of `credits:*` KEYS scans.
 // Every individual credit is tagged with its own id so a single mutation only
 // touches that credit's key; every list query is tagged with the shared
@@ -339,9 +332,11 @@ export class CreditsService {
 
     let repoResult: import('./credit.repository').CursorPageResult<CreditEntity>;
     try {
-      repoResult = await (
-        this.creditRepo as import('./credit.repository').ICreditRepository
-      ).findByFilterCursor(repoFilter, filter.cursor, filter.limit);
+      repoResult = await this.creditRepo.findByFilterCursor(
+        repoFilter,
+        filter.cursor,
+        filter.limit,
+      );
     } catch (err) {
       this.logger.warn(
         `Failed to fetch credits (cursor) from repo: ${(err as Error).message}`,

@@ -18,8 +18,7 @@ function resolveRelease(): string {
   // __SENTRY_RELEASE__ is replaced by a string literal at build time via the
   // Angular CLI `define` option in the production build configuration.
   const buildTimeRelease =
-    typeof (globalThis as Record<string, unknown>)['__SENTRY_RELEASE__'] ===
-    'string'
+    typeof (globalThis as Record<string, unknown>)['__SENTRY_RELEASE__'] === 'string'
       ? ((globalThis as Record<string, unknown>)['__SENTRY_RELEASE__'] as string)
       : '';
 

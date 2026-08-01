@@ -59,16 +59,23 @@ export class WebhooksService implements OnModuleInit {
       const stored = await this.cache.get<Webhook[]>(WEBHOOKS_KEY);
       if (stored) {
         this.webhooks = new Map(stored.map((w) => [w.id, w]));
-        this.logger.log(`Loaded ${this.webhooks.size} webhooks from durable store`);
+        this.logger.log(
+          `Loaded ${this.webhooks.size} webhooks from durable store`,
+        );
       }
 
-      const storedDeliveries = await this.cache.get<WebhookDelivery[]>(DELIVERIES_KEY);
+      const storedDeliveries =
+        await this.cache.get<WebhookDelivery[]>(DELIVERIES_KEY);
       if (storedDeliveries) {
         this.deliveries = new Map(storedDeliveries.map((d) => [d.id, d]));
-        this.logger.log(`Loaded ${this.deliveries.size} deliveries from durable store`);
+        this.logger.log(
+          `Loaded ${this.deliveries.size} deliveries from durable store`,
+        );
       }
     } catch (err) {
-      this.logger.warn(`Failed to load webhooks from durable store: ${(err as Error).message}`);
+      this.logger.warn(
+        `Failed to load webhooks from durable store: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -92,7 +99,9 @@ export class WebhooksService implements OnModuleInit {
         86400,
       );
     } catch (err) {
-      this.logger.warn(`Failed to persist deliveries: ${(err as Error).message}`);
+      this.logger.warn(
+        `Failed to persist deliveries: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -159,10 +168,11 @@ export class WebhooksService implements OnModuleInit {
     eventData: any,
   ): Promise<void> {
     try {
-      await this.cache.get<WebhookDelivery>(`${DELIVERY_QUEUE_KEY}:${delivery.id}`) ?? null;
       const job = { webhook, delivery, eventType, eventData };
       await this.cache.set(`${DELIVERY_QUEUE_KEY}:${delivery.id}`, job, 3600);
-      this.logger.debug(`Enqueued webhook delivery ${delivery.id} for ${webhook.url}`);
+      this.logger.debug(
+        `Enqueued webhook delivery ${delivery.id} for ${webhook.url}`,
+      );
     } catch (err) {
       this.logger.warn(`Failed to enqueue delivery: ${(err as Error).message}`);
     }
@@ -175,7 +185,9 @@ export class WebhooksService implements OnModuleInit {
     this.isProcessingQueue = true;
     try {
       const pendingDeliveries = Array.from(this.deliveries.values()).filter(
-        (d) => d.status === 'pending' && (!d.nextRetryAt || d.nextRetryAt <= new Date()),
+        (d) =>
+          d.status === 'pending' &&
+          (!d.nextRetryAt || d.nextRetryAt <= new Date()),
       );
 
       for (const delivery of pendingDeliveries) {
@@ -220,7 +232,8 @@ export class WebhooksService implements OnModuleInit {
 
       if (delivery.attempts < this.MAX_RETRIES) {
         delivery.status = 'pending';
-        const backoffMs = this.BASE_RETRY_DELAY_MS * Math.pow(2, delivery.attempts - 1);
+        const backoffMs =
+          this.BASE_RETRY_DELAY_MS * Math.pow(2, delivery.attempts - 1);
         delivery.nextRetryAt = new Date(Date.now() + backoffMs);
         this.logger.warn(
           `Webhook ${webhook.id} delivery failed (attempt ${delivery.attempts}/${this.MAX_RETRIES}), retrying at ${delivery.nextRetryAt}`,

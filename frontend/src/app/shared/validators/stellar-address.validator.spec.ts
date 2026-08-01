@@ -1,13 +1,9 @@
 import { FormControl } from '@angular/forms';
-import {
-  isValidStellarPublicKey,
-  stellarAddressValidator,
-} from './stellar-address.validator';
+import { isValidStellarPublicKey, stellarAddressValidator } from './stellar-address.validator';
 
 describe('stellarAddressValidator', () => {
   // Well-known valid testnet-style public key (checksum-valid).
-  const VALID_ADDRESS =
-    'GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ';
+  const VALID_ADDRESS = 'GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ';
 
   it('accepts a valid Stellar public key', () => {
     expect(isValidStellarPublicKey(VALID_ADDRESS)).toBe(true);
@@ -23,9 +19,7 @@ describe('stellarAddressValidator', () => {
   });
 
   it('rejects addresses with a corrupted checksum', () => {
-    const mutated =
-      VALID_ADDRESS.slice(0, -1) +
-      (VALID_ADDRESS.at(-1) === 'A' ? 'B' : 'A');
+    const mutated = VALID_ADDRESS.slice(0, -1) + (VALID_ADDRESS.at(-1) === 'A' ? 'B' : 'A');
     expect(isValidStellarPublicKey(mutated)).toBe(false);
   });
 

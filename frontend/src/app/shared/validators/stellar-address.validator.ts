@@ -53,7 +53,7 @@ export function isValidStellarPublicKey(address: string): boolean {
   if (!decoded || decoded.length !== 35) return false;
 
   const versionByte = decoded[0];
-  if (versionByte !== (6 << 3)) return false; // 'G' version byte = 48
+  if (versionByte !== 6 << 3) return false; // 'G' version byte = 48
 
   const payload = decoded.slice(0, 33);
   const checksum = decoded.slice(33, 35);

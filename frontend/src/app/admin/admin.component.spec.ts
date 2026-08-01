@@ -15,7 +15,11 @@ describe('AdminComponent', () => {
 
   function createApiSpy() {
     return {
-      getAdminStats: vi.fn().mockReturnValue(of({ totalCredits: 0, totalRetirements: 0, activeVerifiers: 3, paused: false })),
+      getAdminStats: vi
+        .fn()
+        .mockReturnValue(
+          of({ totalCredits: 0, totalRetirements: 0, activeVerifiers: 3, paused: false }),
+        ),
       registerMethodology: vi.fn(),
       getAdminNonce: vi.fn().mockReturnValue(of({ address: 'GADMIN', nonce: 0 })),
       setRequiredApprovals: vi.fn(),
@@ -41,7 +45,10 @@ describe('AdminComponent', () => {
       imports: [AdminComponent],
       providers: [
         { provide: ApiService, useValue: apiSpy },
-        { provide: AuthService, useValue: { token: () => MOCK_TOKEN, isAuthenticated: () => true } },
+        {
+          provide: AuthService,
+          useValue: { token: () => MOCK_TOKEN, isAuthenticated: () => true },
+        },
         { provide: ToastService, useValue: toastSpy },
       ],
     }).compileComponents();
@@ -117,9 +124,7 @@ describe('AdminComponent', () => {
   });
 
   it('sets error when registerMethodology fails', async () => {
-    apiSpy.registerMethodology.mockReturnValue(
-      throwError(() => new Error('Already registered')),
-    );
+    apiSpy.registerMethodology.mockReturnValue(throwError(() => new Error('Already registered')));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -151,9 +156,7 @@ describe('AdminComponent', () => {
   });
 
   it('sets error when setRequiredApprovals fails', async () => {
-    apiSpy.setRequiredApprovals.mockReturnValue(
-      throwError(() => new Error('Threshold too high')),
-    );
+    apiSpy.setRequiredApprovals.mockReturnValue(throwError(() => new Error('Threshold too high')));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -195,9 +198,7 @@ describe('AdminComponent', () => {
   });
 
   it('sets error when pauseContract fails', async () => {
-    apiSpy.pauseContract.mockReturnValue(
-      throwError(() => new Error('Contract call failed')),
-    );
+    apiSpy.pauseContract.mockReturnValue(throwError(() => new Error('Contract call failed')));
     (component as any).openPauseConfirm();
     await (component as any).confirmPause();
     expect((component as any)['pauseError']()).toBe('Contract call failed');

@@ -1,5 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -85,11 +85,7 @@ import { RequestMetricsMiddleware } from './metrics/request-metrics.middleware';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
-      .apply(
-        RequestIdMiddleware,
-        LoggingMiddleware,
-        RequestMetricsMiddleware,
-      )
+      .apply(RequestIdMiddleware, LoggingMiddleware, RequestMetricsMiddleware)
       .forRoutes('*');
   }
 }

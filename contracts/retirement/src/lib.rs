@@ -1097,7 +1097,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (contract_id, registry, credit_id, _, issuer) = setup(&env);
+        let (contract_id, registry, credit_id, _, _issuer) = setup(&env);
         let client = RetirementClient::new(&env, &contract_id);
         let buyer = Address::generate(&env);
 
@@ -1243,7 +1243,10 @@ mod tests {
         client.set_certificate_hash(
             &retirement_admin,
             &ret_id,
-            &String::from_str(&env, "bafybeiczsscdsbs7ffqz55asqdf3smv6klcw3gofszvwlyarci47bgf354"),
+            &String::from_str(
+                &env,
+                "bafybeiczsscdsbs7ffqz55asqdf3smv6klcw3gofszvwlyarci47bgf354",
+            ),
             &admin_nonce,
         );
 
@@ -1251,7 +1254,10 @@ mod tests {
         let updated = client.get_retirement(&ret_id).unwrap();
         assert_eq!(
             updated.certificate_ipfs_hash,
-            String::from_str(&env, "bafybeiczsscdsbs7ffqz55asqdf3smv6klcw3gofszvwlyarci47bgf354")
+            String::from_str(
+                &env,
+                "bafybeiczsscdsbs7ffqz55asqdf3smv6klcw3gofszvwlyarci47bgf354"
+            )
         );
     }
 
@@ -1346,3 +1352,4 @@ mod tests {
 
         assert!(result.is_err());
     }
+}

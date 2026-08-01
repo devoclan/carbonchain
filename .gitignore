@@ -82,6 +82,9 @@ build/
 # Rust/Soroban compiled output
 *.wasm
 Cargo.lock
+# The contracts workspace pins ed25519-dalek to the soroban-sdk 26 stack;
+# commit its lockfile so CI builds don't re-resolve to incompatible versions.
+!contracts/Cargo.lock
 
 # Package manager
 .npm/

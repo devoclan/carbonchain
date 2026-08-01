@@ -39,7 +39,7 @@ function isQueryTimeout(err: unknown): err is QueryTimeoutError {
   // TypeORM also wraps it as a QueryTimeoutError with name 'QueryTimeoutError'.
   return (
     e.name === 'QueryTimeoutError' ||
-    (e as QueryTimeoutError).code === '57014' ||
+    e.code === '57014' ||
     e.message.includes('canceling statement due to statement timeout') ||
     e.message.includes('query timeout')
   );

@@ -4,6 +4,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   InternalServerErrorException,
+  NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
@@ -11,7 +13,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { CacheService } from '../common/cache.service';
 import { nativeToScVal, scValToNative } from '@stellar/stellar-sdk';
-import { MrvDataPoint } from '../../shared';
+import { MrvDataPoint } from '../../../shared';
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -70,32 +72,46 @@ function mapOracleContractError(error: unknown): never {
 
   // Extract a numeric error code from Soroban error strings such as:
   //   "Error(Contract, #400)" or "contract error 400"
-  const match = /(?:Error\(Contract,\s*#|contract error\s*)(\d+)/i.exec(message);
+  const match = /(?:Error\(Contract,\s*#|contract error\s*)(\d+)/i.exec(
+    message,
+  );
   const code = match ? parseInt(match[1], 10) : NaN;
 
   switch (code) {
     case 400: // NotInitialized
-      throw new ServiceUnavailableException('Oracle contract is not initialized');
+      throw new ServiceUnavailableException(
+        'Oracle contract is not initialized',
+      );
     case 401: // Unauthorized
       throw new UnauthorizedException('Oracle: caller is not authorized');
     case 402: // AlreadyInitialized
       throw new BadRequestException('Oracle contract is already initialized');
     case 403: // Overflow
-      throw new BadRequestException('Oracle: arithmetic overflow — tonnes value too large');
+      throw new BadRequestException(
+        'Oracle: arithmetic overflow — tonnes value too large',
+      );
     case 404: // ContractPaused
-      throw new ServiceUnavailableException('Oracle contract is currently paused');
+      throw new ServiceUnavailableException(
+        'Oracle contract is currently paused',
+      );
     case 405: // ProjectNotFound
       throw new NotFoundException('Oracle: project not found in registry');
     case 406: // InvalidNonce
       throw new BadRequestException('Oracle: invalid replay-protection nonce');
     case 407: // InvalidProject
-      throw new BadRequestException('Oracle: project has no credits in registry');
+      throw new BadRequestException(
+        'Oracle: project has no credits in registry',
+      );
     case 408: // InvalidTimestamp
       throw new BadRequestException('Oracle: timestamp is in the future');
     case 409: // NoPendingAdmin
-      throw new BadRequestException('Oracle: no pending admin transfer to accept');
+      throw new BadRequestException(
+        'Oracle: no pending admin transfer to accept',
+      );
     case 410: // InvalidReading
-      throw new BadRequestException('Oracle: tonnes reading must be non-negative');
+      throw new BadRequestException(
+        'Oracle: tonnes reading must be non-negative',
+      );
     default:
       throw error;
   }
@@ -191,12 +207,8 @@ export class OracleService {
       // Surface contract-level timestamp rejection as a 400 to the caller
       // rather than an opaque 500. The contract returns OracleError::InvalidTimestamp (127)
       // when the supplied timestamp is in the future relative to the ledger.
-      const message =
-        err instanceof Error ? err.message : String(err);
-      if (
-        message.includes('InvalidTimestamp') ||
-        message.includes('127')
-      ) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('InvalidTimestamp') || message.includes('127')) {
         throw new BadRequestException(
           'Timestamp rejected by contract: clock skew too large. Please retry.',
         );
@@ -285,16 +297,21 @@ export class OracleService {
     if (!Array.isArray(raw)) {
       return [];
     }
+    const toString = (v: unknown, fallback: string): string =>
+      typeof v === 'string' ||
+      typeof v === 'number' ||
+      typeof v === 'bigint' ||
+      typeof v === 'boolean'
+        ? String(v)
+        : fallback;
     return (raw as Array<Record<string, unknown>>).map((item) => ({
-      oracle: String(item['oracle'] ?? ''),
-      project_id: String(item['project_id'] ?? ''),
+      oracle: toString(item['oracle'], ''),
+      project_id: toString(item['project_id'], ''),
       // tonnes is i128 — convert via BigInt to avoid precision loss
-      tonnes_sequestered: BigInt(
-        String(item['tonnes'] ?? '0'),
-      ).toString(),
+      tonnes_sequestered: BigInt(toString(item['tonnes'], '0')).toString(),
       measurement_date: Number(item['recorded_at'] ?? 0),
       // methodology is not stored on-chain in the data point; default to empty
-      methodology: String(item['methodology'] ?? ''),
+      methodology: toString(item['methodology'], ''),
       anomaly_flag: Boolean(item['anomaly'] ?? false),
     }));
   }
@@ -403,9 +420,7 @@ export class OracleService {
     }
 
     // Sort monthly breakdown chronologically
-    const monthlyBreakdown: MonthlyBucket[] = Array.from(
-      monthlyMap.entries(),
-    )
+    const monthlyBreakdown: MonthlyBucket[] = Array.from(monthlyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, bucket]) => ({
         month,
@@ -442,7 +457,11 @@ export class OracleService {
     projectId: string,
     thresholdBps: number,
   ): Promise<{ projectId: string; thresholdBps: number | null }> {
-    if (!Number.isInteger(thresholdBps) || thresholdBps < 0 || thresholdBps > 10000) {
+    if (
+      !Number.isInteger(thresholdBps) ||
+      thresholdBps < 0 ||
+      thresholdBps > 10000
+    ) {
       throw new BadRequestException(
         'thresholdBps must be an integer between 0 and 10000',
       );

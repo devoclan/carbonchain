@@ -67,7 +67,7 @@ describe('ThrottlerGuard', () => {
     delete process.env['THROTTLER_SKIP_IPS'];
   });
 
-  it('allows requests when no throttle options are set', () => {
+  it('allows requests when no throttle options are set', async () => {
     jest.spyOn(reflector, 'get').mockReturnValue(undefined);
     const ctx = {
       switchToHttp: () => ({
@@ -353,20 +353,28 @@ describe('ThrottlerGuard (per-account mode)', () => {
       } as unknown as ExecutionContext;
     };
 
-    await expect(guard.canActivate(makeCtxWithIp('9.9.9.9', 1))).resolves.toBe(true);
-    await expect(guard.canActivate(makeCtxWithIp('9.9.9.9', 2))).resolves.toBe(true);
-    await expect(guard.canActivate(makeCtxWithIp('9.9.9.9', 3))).rejects.toThrow(
-      HttpException,
+    await expect(guard.canActivate(makeCtxWithIp('9.9.9.9', 1))).resolves.toBe(
+      true,
     );
+    await expect(guard.canActivate(makeCtxWithIp('9.9.9.9', 2))).resolves.toBe(
+      true,
+    );
+    await expect(
+      guard.canActivate(makeCtxWithIp('9.9.9.9', 3)),
+    ).rejects.toThrow(HttpException);
   });
 
   // ── THROTTLER_SKIP_IPS (skip-list) tests ────────────────────────────────
 
   describe('skip list (THROTTLER_SKIP_IPS)', () => {
-    it('bypasses throttling for an IP in the skip list (exact host /32)', () => {
+    it('bypasses throttling for an IP in the skip list (exact host /32)', async () => {
       const options: ThrottleOptions = { limit: 1, ttl: 60_000 };
       const skipGuard = makeGuardWithSkipIps('203.0.113.42/32');
-      jest.spyOn(skipGuard['reflector'], 'get').mockReturnValue(options);
+      jest
+        .spyOn(skipGuard['reflector'], 'get')
+        .mockImplementation((key: unknown) =>
+          key === ACCOUNT_THROTTLE_KEY ? undefined : options,
+        );
 
       const makeCtx = () =>
         ({
@@ -382,15 +390,19 @@ describe('ThrottlerGuard (per-account mode)', () => {
         }) as unknown as ExecutionContext;
 
       // Both calls succeed despite limit=1 because the IP is skipped.
-      expect(skipGuard.canActivate(makeCtx())).toBe(true);
-      expect(skipGuard.canActivate(makeCtx())).toBe(true);
+      await expect(skipGuard.canActivate(makeCtx())).resolves.toBe(true);
+      await expect(skipGuard.canActivate(makeCtx())).resolves.toBe(true);
     });
 
-    it('bypasses throttling for an IP matched by a CIDR range', () => {
+    it('bypasses throttling for an IP matched by a CIDR range', async () => {
       const options: ThrottleOptions = { limit: 1, ttl: 60_000 };
       // 127.0.0.1/8 covers the entire 127.x.x.x loopback block.
       const skipGuard = makeGuardWithSkipIps('127.0.0.1/8,10.0.0.0/8');
-      jest.spyOn(skipGuard['reflector'], 'get').mockReturnValue(options);
+      jest
+        .spyOn(skipGuard['reflector'], 'get')
+        .mockImplementation((key: unknown) =>
+          key === ACCOUNT_THROTTLE_KEY ? undefined : options,
+        );
 
       const makeCtx = (ip: string) =>
         ({
@@ -406,18 +418,30 @@ describe('ThrottlerGuard (per-account mode)', () => {
         }) as unknown as ExecutionContext;
 
       // Loopback
-      expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).toBe(true);
-      expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).toBe(true);
+      await expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).resolves.toBe(
+        true,
+      );
+      await expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).resolves.toBe(
+        true,
+      );
 
       // Private 10.x.x.x
-      expect(skipGuard.canActivate(makeCtx('10.20.30.40'))).toBe(true);
-      expect(skipGuard.canActivate(makeCtx('10.20.30.40'))).toBe(true);
+      await expect(skipGuard.canActivate(makeCtx('10.20.30.40'))).resolves.toBe(
+        true,
+      );
+      await expect(skipGuard.canActivate(makeCtx('10.20.30.40'))).resolves.toBe(
+        true,
+      );
     });
 
-    it('does NOT bypass throttling for an IP outside the skip list', () => {
+    it('does NOT bypass throttling for an IP outside the skip list', async () => {
       const options: ThrottleOptions = { limit: 1, ttl: 60_000 };
       const skipGuard = makeGuardWithSkipIps('127.0.0.1/8');
-      jest.spyOn(skipGuard['reflector'], 'get').mockReturnValue(options);
+      jest
+        .spyOn(skipGuard['reflector'], 'get')
+        .mockImplementation((key: unknown) =>
+          key === ACCOUNT_THROTTLE_KEY ? undefined : options,
+        );
 
       const makeCtx = () =>
         ({
@@ -432,17 +456,24 @@ describe('ThrottlerGuard (per-account mode)', () => {
           getClass: () => ({}),
         }) as unknown as ExecutionContext;
 
-      expect(skipGuard.canActivate(makeCtx())).toBe(true);
+      await expect(skipGuard.canActivate(makeCtx())).resolves.toBe(true);
       // Second call must be throttled because 203.0.113.1 is not skipped.
-      expect(() => skipGuard.canActivate(makeCtx())).toThrow(
-        new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS),
+      await expect(skipGuard.canActivate(makeCtx())).rejects.toThrow(
+        new HttpException(
+          { message: 'Too Many Requests', retryAfter: expect.any(Number) },
+          HttpStatus.TOO_MANY_REQUESTS,
+        ),
       );
     });
 
-    it('does not add bypass headers for skipped IPs', () => {
+    it('does not add bypass headers for skipped IPs', async () => {
       const options: ThrottleOptions = { limit: 1, ttl: 60_000 };
       const skipGuard = makeGuardWithSkipIps('10.0.0.0/8');
-      jest.spyOn(skipGuard['reflector'], 'get').mockReturnValue(options);
+      jest
+        .spyOn(skipGuard['reflector'], 'get')
+        .mockImplementation((key: unknown) =>
+          key === ACCOUNT_THROTTLE_KEY ? undefined : options,
+        );
 
       const mockSetHeader = jest.fn();
       const ctx = {
@@ -458,16 +489,20 @@ describe('ThrottlerGuard (per-account mode)', () => {
         getClass: () => ({}),
       } as unknown as ExecutionContext;
 
-      skipGuard.canActivate(ctx);
+      await skipGuard.canActivate(ctx);
 
       // No X-RateLimit-Bypass or similar header must be set.
       expect(mockSetHeader).not.toHaveBeenCalled();
     });
 
-    it('handles empty THROTTLER_SKIP_IPS gracefully (default behaviour unchanged)', () => {
+    it('handles empty THROTTLER_SKIP_IPS gracefully (default behaviour unchanged)', async () => {
       const options: ThrottleOptions = { limit: 1, ttl: 60_000 };
       const skipGuard = makeGuardWithSkipIps('');
-      jest.spyOn(skipGuard['reflector'], 'get').mockReturnValue(options);
+      jest
+        .spyOn(skipGuard['reflector'], 'get')
+        .mockImplementation((key: unknown) =>
+          key === ACCOUNT_THROTTLE_KEY ? undefined : options,
+        );
 
       const makeCtx = () =>
         ({
@@ -482,15 +517,21 @@ describe('ThrottlerGuard (per-account mode)', () => {
           getClass: () => ({}),
         }) as unknown as ExecutionContext;
 
-      expect(skipGuard.canActivate(makeCtx())).toBe(true);
-      expect(() => skipGuard.canActivate(makeCtx())).toThrow(HttpException);
+      await expect(skipGuard.canActivate(makeCtx())).resolves.toBe(true);
+      await expect(skipGuard.canActivate(makeCtx())).rejects.toThrow(
+        HttpException,
+      );
     });
 
-    it('ignores malformed CIDR entries without crashing', () => {
+    it('ignores malformed CIDR entries without crashing', async () => {
       const options: ThrottleOptions = { limit: 1, ttl: 60_000 };
       // "bad-cidr" is not valid — should be silently discarded.
       const skipGuard = makeGuardWithSkipIps('bad-cidr,127.0.0.0/8');
-      jest.spyOn(skipGuard['reflector'], 'get').mockReturnValue(options);
+      jest
+        .spyOn(skipGuard['reflector'], 'get')
+        .mockImplementation((key: unknown) =>
+          key === ACCOUNT_THROTTLE_KEY ? undefined : options,
+        );
 
       const makeCtx = (ip: string) =>
         ({
@@ -506,12 +547,20 @@ describe('ThrottlerGuard (per-account mode)', () => {
         }) as unknown as ExecutionContext;
 
       // Valid entry still works.
-      expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).toBe(true);
-      expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).toBe(true);
+      await expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).resolves.toBe(
+        true,
+      );
+      await expect(skipGuard.canActivate(makeCtx('127.0.0.1'))).resolves.toBe(
+        true,
+      );
 
       // A non-skipped IP is still throttled.
-      expect(skipGuard.canActivate(makeCtx('8.8.8.8'))).toBe(true);
-      expect(() => skipGuard.canActivate(makeCtx('8.8.8.8'))).toThrow(HttpException);
+      await expect(skipGuard.canActivate(makeCtx('8.8.8.8'))).resolves.toBe(
+        true,
+      );
+      await expect(skipGuard.canActivate(makeCtx('8.8.8.8'))).rejects.toThrow(
+        HttpException,
+      );
     });
   });
 });

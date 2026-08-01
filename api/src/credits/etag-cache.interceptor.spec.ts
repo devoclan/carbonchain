@@ -1,7 +1,7 @@
 import { ExecutionContext, CallHandler } from '@nestjs/common';
 import { of } from 'rxjs';
 import { ETagCacheInterceptor } from './etag-cache.interceptor';
-import { CreditStatus } from '@shared';
+import { CreditStatus } from '../../../shared';
 
 describe('ETagCacheInterceptor', () => {
   let interceptor: ETagCacheInterceptor;
@@ -10,9 +10,12 @@ describe('ETagCacheInterceptor', () => {
     interceptor = new ETagCacheInterceptor();
   });
 
-  function createMockContext(credit: Record<string, unknown>, ifNoneMatch?: string) {
+  function createMockContext(
+    credit: Record<string, unknown>,
+    ifNoneMatch?: string,
+  ) {
     const responseHeaders: Record<string, string> = {};
-    let statusCode = 200;
+    const state = { statusCode: 200 };
 
     const request = {
       headers: ifNoneMatch ? { 'if-none-match': ifNoneMatch } : {},
@@ -23,7 +26,7 @@ describe('ETagCacheInterceptor', () => {
         responseHeaders[key] = value;
       },
       status: (code: number) => {
-        statusCode = code;
+        state.statusCode = code;
         return response;
       },
     };
@@ -39,7 +42,7 @@ describe('ETagCacheInterceptor', () => {
       handle: () => of(credit),
     };
 
-    return { context, callHandler, responseHeaders, statusCode };
+    return { context, callHandler, responseHeaders, state };
   }
 
   it('adds ETag header for credit response', (done) => {
@@ -117,18 +120,18 @@ describe('ETagCacheInterceptor', () => {
     };
 
     // First compute the ETag
-    const { context: ctx1, callHandler: ch1, responseHeaders: rh1 } =
-      createMockContext(credit);
+    const {
+      context: ctx1,
+      callHandler: ch1,
+      responseHeaders: rh1,
+    } = createMockContext(credit);
     interceptor.intercept(ctx1, ch1).subscribe(() => {
       const etag = rh1['ETag'];
 
       // Now test with matching If-None-Match
-      const { context, callHandler, statusCode } = createMockContext(
-        credit,
-        etag,
-      );
+      const { context, callHandler, state } = createMockContext(credit, etag);
       interceptor.intercept(context, callHandler).subscribe((result) => {
-        expect(statusCode).toBe(304);
+        expect(state.statusCode).toBe(304);
         expect(result).toBeNull();
         done();
       });

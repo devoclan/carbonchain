@@ -81,8 +81,7 @@ export class OracleController {
     @Param('projectId') projectId: string,
     @Query('excludeAnomalies') excludeAnomaliesParam?: string,
   ): Promise<MrvAggregateResponse> {
-    const excludeAnomalies =
-      excludeAnomaliesParam?.toLowerCase() === 'true';
+    const excludeAnomalies = excludeAnomaliesParam?.toLowerCase() === 'true';
     return this.oracleService.getAggregate(projectId, excludeAnomalies);
   }
 

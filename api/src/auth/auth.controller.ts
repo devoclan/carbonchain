@@ -58,9 +58,7 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @AccountThrottle({ accountLimit: 10, ipLimit: 50, ttl: 300_000 })
   @Post('verify')
-  async verify(
-    @Body() body: AuthTokenDto,
-  ): Promise<{ access_token: string }> {
+  async verify(@Body() body: AuthTokenDto): Promise<{ access_token: string }> {
     return this.authService.verifyAndIssueToken(body.transaction);
   }
 
@@ -73,7 +71,11 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(
-    @Request() req: { user: { account: string }; headers: { authorization?: string } },
+    @Request()
+    req: {
+      user: { account: string };
+      headers: { authorization?: string };
+    },
   ): Promise<{ message: string }> {
     const authHeader = req.headers.authorization ?? '';
     const token = authHeader.startsWith('Bearer ')

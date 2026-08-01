@@ -528,3 +528,58 @@ pub fn remove_unbonding_request(env: &Env, verifier: &Address) {
         .persistent()
         .remove(&DataKey::UnbondingRequest(verifier.clone()));
 }
+
+// ── Per-credit verifier snapshots ──────────────────────────────────────────────
+
+pub fn get_credit_verifiers(env: &Env, credit_id: &BytesN<32>) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CreditVerifiers(credit_id.clone()))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn set_credit_verifiers(env: &Env, credit_id: &BytesN<32>, verifiers: &Vec<Address>) {
+    let key = DataKey::CreditVerifiers(credit_id.clone());
+    env.storage().persistent().set(&key, verifiers);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
+}
+
+pub fn remove_credit_verifiers(env: &Env, credit_id: &BytesN<32>) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::CreditVerifiers(credit_id.clone()));
+}
+
+// ── Pending credits index ────────────────────────────────────────────────────
+
+pub fn get_pending_credits(env: &Env) -> Vec<BytesN<32>> {
+    env.storage()
+        .instance()
+        .get(&DataKey::PendingCredits)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_to_pending_credits(env: &Env, credit_id: &BytesN<32>) {
+    let mut pending = get_pending_credits(env);
+    pending.push_back(credit_id.clone());
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingCredits, &pending);
+    env.storage().instance().extend_ttl(TTL_THRESHOLD, MIN_TTL);
+}
+
+pub fn remove_from_pending_credits(env: &Env, credit_id: &BytesN<32>) {
+    let pending = get_pending_credits(env);
+    let mut updated: Vec<BytesN<32>> = Vec::new(env);
+    for id in pending.iter() {
+        if id != *credit_id {
+            updated.push_back(id);
+        }
+    }
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingCredits, &updated);
+    env.storage().instance().extend_ttl(TTL_THRESHOLD, MIN_TTL);
+}

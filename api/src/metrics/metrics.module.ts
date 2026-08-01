@@ -8,11 +8,7 @@ import { metricsEventEmitterProvider } from './metrics-events';
 @Global()
 @Module({
   controllers: [MetricsController],
-  providers: [
-    MetricsService,
-    MetricsListener,
-    metricsEventEmitterProvider,
-  ],
+  providers: [MetricsService, MetricsListener, metricsEventEmitterProvider],
   exports: [MetricsService, metricsEventEmitterProvider],
 })
 export class MetricsModule implements NestModule {

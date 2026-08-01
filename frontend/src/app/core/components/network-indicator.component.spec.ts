@@ -3,10 +3,7 @@ import { signal } from '@angular/core';
 import { NetworkIndicatorComponent } from './network-indicator.component';
 import { StellarWalletService } from '../services/stellar-wallet.service';
 
-function createWalletStub(
-  network: 'testnet' | 'mainnet' | null,
-  mismatch: boolean,
-) {
+function createWalletStub(network: 'testnet' | 'mainnet' | null, mismatch: boolean) {
   return {
     network: signal(network),
     networkMismatch: signal(mismatch),

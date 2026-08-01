@@ -25,7 +25,11 @@ export const queryDurationSeconds = new Histogram({
 });
 
 export class SlowQueryLogger implements TypeOrmLogger {
-  logQuery(_query: string, _parameters?: unknown[], _queryRunner?: QueryRunner): void {
+  logQuery(
+    _query: string,
+    _parameters?: unknown[],
+    _queryRunner?: QueryRunner,
+  ): void {
     // No-op in production; TypeORM's built-in 'query' logging level covers dev.
   }
 
@@ -41,12 +45,11 @@ export class SlowQueryLogger implements TypeOrmLogger {
       return;
     }
 
-    const requestId = RequestContextStore.get()?.requestId ?? 'unknown';
+    const requestId = RequestContextStore.getRequestId() ?? 'unknown';
     slowQueriesTotal.inc({ request_id: requestId });
 
     this.explainAnalyze(query, parameters, queryRunner)
       .then((plan) => {
-        // eslint-disable-next-line no-console
         console.warn('[slow-query]', {
           requestId,
           durationMs: time,
@@ -56,7 +59,6 @@ export class SlowQueryLogger implements TypeOrmLogger {
         });
       })
       .catch(() => {
-        // eslint-disable-next-line no-console
         console.warn('[slow-query]', {
           requestId,
           durationMs: time,
@@ -87,8 +89,8 @@ export class SlowQueryLogger implements TypeOrmLogger {
     parameters?: unknown[],
     _queryRunner?: QueryRunner,
   ): void {
-    const requestId = RequestContextStore.get()?.requestId ?? 'unknown';
-    // eslint-disable-next-line no-console
+    const requestId = RequestContextStore.getRequestId() ?? 'unknown';
+
     console.error('[query-error]', { requestId, query, parameters, error });
   }
 

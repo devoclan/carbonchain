@@ -54,7 +54,8 @@ describe('AdminService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn().mockImplementation((key: string) => {
-              if (key === 'CREDIT_REGISTRY_CONTRACT_ID') return 'CCGJQV2J3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3';
+              if (key === 'CREDIT_REGISTRY_CONTRACT_ID')
+                return 'CCGJQV2J3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3';
               return undefined;
             }),
           },
@@ -70,7 +71,9 @@ describe('AdminService', () => {
           provide: StellarKeypairService,
           useValue: {
             getAdminKeypair: jest.fn().mockReturnValue(mockAdminKeypair),
-            getAdminPublicKey: jest.fn().mockReturnValue(mockAdminKeypair.publicKey()),
+            getAdminPublicKey: jest
+              .fn()
+              .mockReturnValue(mockAdminKeypair.publicKey()),
           },
         },
       ],
@@ -85,9 +88,10 @@ describe('AdminService', () => {
 
   describe('getStats', () => {
     it('should return stats with active verifier count and paused state', async () => {
-      stellarService.readContract.mockResolvedValue(
-        { type: 'bool', value: false } as any,
-      );
+      stellarService.readContract.mockResolvedValue({
+        type: 'bool',
+        value: false,
+      } as any);
       const stats = await service.getStats();
       expect(stats.activeVerifiers).toBe(2);
       expect(stats).toHaveProperty('totalCredits');
@@ -97,7 +101,9 @@ describe('AdminService', () => {
     });
 
     it('should default paused to false when contract call fails', async () => {
-      stellarService.readContract.mockRejectedValue(new Error('Contract unavailable'));
+      stellarService.readContract.mockRejectedValue(
+        new Error('Contract unavailable'),
+      );
       const stats = await service.getStats();
       expect(stats.paused).toBe(false);
     });
@@ -177,7 +183,10 @@ describe('AdminService', () => {
     });
 
     it('should return the exact name and description passed in', () => {
-      const result = service.registerMethodology('CDM', 'Clean Development Mechanism');
+      const result = service.registerMethodology(
+        'CDM',
+        'Clean Development Mechanism',
+      );
       expect(result.name).toBe('CDM');
       expect(result.description).toBe('Clean Development Mechanism');
     });

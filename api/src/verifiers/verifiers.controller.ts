@@ -86,9 +86,13 @@ export class VerifiersController {
   @ApiOperation({ summary: 'Get verifier reputation' })
   @ApiResponse({
     status: 200,
-    description: 'Returns { address, approvalCount, disputeCount } for the verifier.',
+    description:
+      'Returns { address, approvalCount, disputeCount } for the verifier.',
   })
-  @ApiResponse({ status: 400, description: 'Invalid Stellar Ed25519 public key format.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid Stellar Ed25519 public key format.',
+  })
   @ApiResponse({ status: 404, description: 'Verifier not found.' })
   @Header('Cache-Control', 'max-age=60')
   @Get(':address/reputation')

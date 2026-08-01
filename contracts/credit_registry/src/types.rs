@@ -151,6 +151,8 @@ pub enum DataKey {
     /// Maintained by submit_credit (add) and approve_and_mint/flag_credit (remove).
     /// Used by remove_verifier to iterate per-credit snapshots efficiently.
     PendingCredits,
+    /// Total number of credits ever submitted. Never decremented — used for O(1) credit count.
+    TotalCredits,
     /// Stake amount (in the configured stake token's smallest unit) locked by a verifier.
     VerifierStake(Address),
     /// Minimum stake required to register as a verifier. Configurable by the admin.

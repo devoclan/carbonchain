@@ -69,7 +69,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     await this.cache.set(
       cacheKey,
-      { status: 'processing' } as IdempotencyRecord,
+      { status: 'processing' },
       IDEMPOTENCY_TTL_SECONDS,
     );
 
@@ -84,7 +84,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
           status: 'completed',
           statusCode: res.statusCode ?? 201,
           body: result,
-        } as IdempotencyRecord,
+        },
         IDEMPOTENCY_TTL_SECONDS,
       );
 
@@ -97,7 +97,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
   }
 
-  private async waitForCompletion(cacheKey: string, res: any): Promise<unknown> {
+  private async waitForCompletion(
+    cacheKey: string,
+    res: any,
+  ): Promise<unknown> {
     const deadline = Date.now() + PROCESSING_WAIT_TIMEOUT_MS;
 
     while (Date.now() < deadline) {

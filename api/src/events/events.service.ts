@@ -27,15 +27,7 @@ const CREDIT_STATUS_CHANGE_EVENTS = new Set([
 ]);
 
 const MAX_EVENTS_DEFAULT = 10_000;
-const LAST_LEDGER_KEY = 'events:lastLedger';
 
-@Injectable()
-export class EventsService implements OnModuleInit {
-  private readonly logger = new Logger(EventsService.name);
-  private lastLedger = 0;
-  private events: Map<string, SorobanEvent> = new Map();
-  private isIndexing = false;
-  private readonly maxEvents: number;
 /**
  * EventsService - Background event indexer with PostgreSQL storage.
  * Polls Soroban RPC every 30 seconds and stores events in the database.
@@ -45,6 +37,8 @@ export class EventsService implements OnModuleInit {
 export class EventsService implements OnModuleInit {
   private readonly logger = new Logger(EventsService.name);
   private readonly lastLedgerCache = new Map<string, number>();
+  private isIndexing = false;
+  private readonly maxEvents: number;
 
   constructor(
     @InjectRepository(EventEntity)
@@ -54,32 +48,13 @@ export class EventsService implements OnModuleInit {
     private webhooksService: WebhooksService,
     private readonly cache: CacheService,
   ) {
-    this.maxEvents = this.configService.get<number>('EVENT_STORE_MAX_SIZE', MAX_EVENTS_DEFAULT);
+    this.maxEvents = this.configService.get<number>(
+      'EVENT_STORE_MAX_SIZE',
+      MAX_EVENTS_DEFAULT,
+    );
   }
 
   async onModuleInit(): Promise<void> {
-    this.logger.log('EventsService initialized');
-    await this.loadState();
-  }
-
-  private async loadState(): Promise<void> {
-    try {
-      const persisted = await this.cache.get<number>(LAST_LEDGER_KEY);
-      if (persisted !== null && persisted > 0) {
-        this.lastLedger = persisted;
-        this.logger.log(`Resumed event indexing from ledger ${this.lastLedger}`);
-      }
-    } catch (err) {
-      this.logger.warn(`Failed to load persisted ledger state: ${(err as Error).message}`);
-    }
-  }
-
-  private async persistLastLedger(): Promise<void> {
-    try {
-      await this.cache.set(LAST_LEDGER_KEY, this.lastLedger, 86400);
-    } catch (err) {
-      this.logger.warn(`Failed to persist lastLedger: ${(err as Error).message}`);
-  async onModuleInit() {
     this.logger.log('EventsService initialized - loading last synced ledgers');
     // Load last synced ledger per contract from DB
     const contractIds = this.getContractIds();
@@ -89,7 +64,7 @@ export class EventsService implements OnModuleInit {
         order: { ledger: 'DESC' },
       });
       if (lastEvent) {
-        this.lastLedgerCache.set(contractId, lastEvent.ledger);
+        this.lastLedgerCache.set(contractId, Number(lastEvent.ledger));
         this.logger.log(
           `Contract ${contractId}: last synced ledger = ${lastEvent.ledger}`,
         );
@@ -104,7 +79,9 @@ export class EventsService implements OnModuleInit {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async indexEvents(): Promise<void> {
     if (this.isIndexing) {
-      this.logger.debug('Skipping indexEvents — previous run still in progress');
+      this.logger.debug(
+        'Skipping indexEvents — previous run still in progress',
+      );
       return;
     }
 
@@ -116,6 +93,7 @@ export class EventsService implements OnModuleInit {
         await this.indexContractEvents(contractId);
       }
 
+      // Retry failed webhook deliveries
       await this.webhooksService.processQueue();
     } catch (error) {
       this.logger.error(`Failed to index events: ${(error as Error).message}`);
@@ -167,12 +145,18 @@ export class EventsService implements OnModuleInit {
 
         await this.eventRepository.save(eventEntity);
 
-        this.events.set(eventId, sorobanEvent);
-        this.enforceEventLimit();
-
         this.logger.debug(
           `Indexed event: ${eventType} from contract ${contractId} at ledger ${event.ledger}`,
         );
+
+        const sorobanEvent: SorobanEvent = {
+          id: eventId,
+          type: eventType,
+          contractId,
+          ledger: event.ledger,
+          timestamp: eventEntity.timestamp,
+          data: eventEntity.data,
+        };
 
         // Invalidate credit cache on status-change events.
         // Issue #540: targeted tag invalidation instead of a `credits:list:*`
@@ -189,27 +173,15 @@ export class EventsService implements OnModuleInit {
           );
         }
 
-        // Enqueue webhook for this event (non-blocking)
+        // Trigger webhooks for this event
         await this.webhooksService.triggerWebhooks(
           sorobanEvent.type,
           sorobanEvent,
         );
       }
 
-      if (events.length > 0) {
-        this.lastLedger = Math.max(...events.map((e) => e.ledger));
-        await this.persistLastLedger();
-      }
-        // Trigger webhooks for this event
-        await this.webhooksService.triggerWebhooks(eventType, {
-          id: eventId,
-          type: eventType,
-          contractId,
-          ledger: event.ledger,
-          timestamp: eventEntity.timestamp,
-          data: eventEntity.data,
-        });
-      }
+      // Keep the store bounded (EVENT_STORE_MAX_SIZE).
+      await this.trimEventStore();
 
       // Update last synced ledger
       const maxLedger = Math.max(...events.map((e) => e.ledger));
@@ -221,12 +193,27 @@ export class EventsService implements OnModuleInit {
     }
   }
 
-  private enforceEventLimit(): void {
-    while (this.events.size > this.maxEvents) {
-      const oldestKey = this.events.keys().next().value;
-      if (oldestKey) {
-        this.events.delete(oldestKey);
+  private async trimEventStore(): Promise<void> {
+    try {
+      const count = await this.eventRepository.count();
+      if (count <= this.maxEvents) return;
+
+      const overflow = count - this.maxEvents;
+      const oldest = await this.eventRepository.find({
+        order: { ledger: 'ASC' },
+        take: overflow,
+        select: { id: true },
+      });
+      if (oldest.length > 0) {
+        await this.eventRepository.delete(oldest.map((e) => e.id));
+        this.logger.warn(
+          `Trimmed ${oldest.length} events from store (max ${this.maxEvents})`,
+        );
       }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to trim event store: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -242,12 +229,7 @@ export class EventsService implements OnModuleInit {
   }
 
   private parseEventTimestamp(event: rpc.Api.EventResponse): number {
-    // Prefer the ledger close time from the RPC response when available.
-    if (event.ledger && event.ledger > 0) {
-      // Approximate ledger timestamp from ledger sequence.
-      // Stellar ledgers close roughly every 5 seconds.
-      return Math.floor(Date.now() / 1000);
-    }
+    // Use ledger timestamp or current time as fallback
     return Math.floor(Date.now() / 1000);
   }
 
@@ -262,7 +244,6 @@ export class EventsService implements OnModuleInit {
 
   /**
    * Query events from PostgreSQL (fast, <50ms).
-   * Replaces the old in-memory Map approach.
    */
   async getEvents(
     contractId?: string,
@@ -333,7 +314,7 @@ export class EventsService implements OnModuleInit {
       where: { contractId },
       order: { ledger: 'DESC' },
     });
-    const newLastLedger = lastEvent ? lastEvent.ledger : 0;
+    const newLastLedger = lastEvent ? Number(lastEvent.ledger) : 0;
     this.lastLedgerCache.set(contractId, newLastLedger);
 
     this.logger.log(

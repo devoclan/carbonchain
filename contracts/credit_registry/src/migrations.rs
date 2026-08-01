@@ -45,25 +45,36 @@ fn migrate_v1_to_v2(_env: &Env) {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::Env;
+    use crate::CreditRegistry;
+    use soroban_sdk::{Address, Env};
+
+    fn setup() -> (Env, Address) {
+        let env = Env::default();
+        let contract_id = env.register(CreditRegistry, ());
+        (env, contract_id)
+    }
 
     #[test]
     fn v1_to_v2_migration_bumps_version_without_touching_existing_credits() {
-        let env = Env::default();
-        set_version(&env, 1);
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            set_version(&env, 1);
 
-        run_migrations(&env, 2).unwrap();
+            run_migrations(&env, 2).unwrap();
 
-        assert_eq!(get_version(&env), 2);
+            assert_eq!(get_version(&env), 2);
+        });
     }
 
     #[test]
     fn migrate_is_a_no_op_when_already_at_target_version() {
-        let env = Env::default();
-        set_version(&env, CURRENT_VERSION);
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            set_version(&env, CURRENT_VERSION);
 
-        run_migrations(&env, CURRENT_VERSION).unwrap();
+            run_migrations(&env, CURRENT_VERSION).unwrap();
 
-        assert_eq!(get_version(&env), CURRENT_VERSION);
+            assert_eq!(get_version(&env), CURRENT_VERSION);
+        });
     }
 }

@@ -315,11 +315,15 @@ export class VerifiersService implements OnApplicationBootstrap {
       [nativeToScVal(address, { type: 'address' })],
     );
     if (!nonceRetval) {
-      throw new Error(`Failed to fetch nonce for verifier ${address}: contract returned no value`);
+      throw new Error(
+        `Failed to fetch nonce for verifier ${address}: contract returned no value`,
+      );
     }
     const nonce = scValToNative(nonceRetval) as bigint;
 
-    this.logger.log(`Verifier ${address} approving credit ${creditId} (nonce=${nonce})`);
+    this.logger.log(
+      `Verifier ${address} approving credit ${creditId} (nonce=${nonce})`,
+    );
 
     const args = [
       nativeToScVal(address, { type: 'address' }),

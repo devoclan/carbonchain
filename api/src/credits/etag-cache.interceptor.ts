@@ -30,7 +30,12 @@ export class ETagCacheInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((body) => {
-        if (body && typeof body === 'object' && 'id' in body && 'status' in body) {
+        if (
+          body &&
+          typeof body === 'object' &&
+          'id' in body &&
+          'status' in body
+        ) {
           const credit = body as {
             id: string;
             status: CreditStatus;
@@ -56,7 +61,9 @@ export class ETagCacheInterceptor implements NestInterceptor {
           }
 
           // Handle If-None-Match for 304 responses
-          const ifNoneMatch = context.switchToHttp().getRequest().headers['if-none-match'];
+          const ifNoneMatch = context.switchToHttp().getRequest().headers[
+            'if-none-match'
+          ];
           if (ifNoneMatch === etag) {
             response.status(304);
             return null;

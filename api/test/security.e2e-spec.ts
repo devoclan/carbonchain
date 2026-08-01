@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, INestApplication, HttpStatus } from '@nestjs/common';
+import {
+  ForbiddenException,
+  INestApplication,
+  HttpStatus,
+} from '@nestjs/common';
 import request from 'supertest';
 import helmet from 'helmet';
 import { AppModule } from '../src/app.module';
@@ -109,10 +113,8 @@ describe('Security Headers (e2e)', () => {
 describe('Per-account rate limiting (issue #492)', () => {
   it('ThrottlerGuard allows requests within accountLimit and blocks after', async () => {
     const { Reflector } = await import('@nestjs/core');
-    const {
-      ThrottlerGuard,
-      ACCOUNT_THROTTLE_KEY,
-    } = await import('../src/common/throttler.guard');
+    const { ThrottlerGuard, ACCOUNT_THROTTLE_KEY } =
+      await import('../src/common/throttler.guard');
     const { HttpException, HttpStatus } = await import('@nestjs/common');
 
     const reflector = new Reflector();
@@ -153,9 +155,8 @@ describe('Per-account rate limiting (issue #492)', () => {
 
   it('IP and account limits are independent — different accounts share the same IP limit', async () => {
     const { Reflector } = await import('@nestjs/core');
-    const { ThrottlerGuard, ACCOUNT_THROTTLE_KEY } = await import(
-      '../src/common/throttler.guard'
-    );
+    const { ThrottlerGuard, ACCOUNT_THROTTLE_KEY } =
+      await import('../src/common/throttler.guard');
     const { HttpException } = await import('@nestjs/common');
 
     const reflector = new Reflector();
@@ -189,8 +190,12 @@ describe('Per-account rate limiting (issue #492)', () => {
     };
 
     // First 2 requests from this IP succeed (different accounts each time).
-    await expect(guard.canActivate(makeCtxWithNewAccount())).resolves.toBe(true);
-    await expect(guard.canActivate(makeCtxWithNewAccount())).resolves.toBe(true);
+    await expect(guard.canActivate(makeCtxWithNewAccount())).resolves.toBe(
+      true,
+    );
+    await expect(guard.canActivate(makeCtxWithNewAccount())).resolves.toBe(
+      true,
+    );
 
     // 3rd request is blocked by the IP limit even though it uses a fresh account.
     await expect(guard.canActivate(makeCtxWithNewAccount())).rejects.toThrow(

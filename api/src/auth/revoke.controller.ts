@@ -32,12 +32,8 @@ export class RevokeController {
   @ApiOperation({ summary: '[admin] Revoke a JWT before its natural expiry' })
   @UseGuards(JwtAuthGuard)
   @Post('revoke')
-  async revoke(
-    @Body() body: RevokeTokenDto,
-  ): Promise<{ revoked: boolean }> {
-    const decoded = this.jwtService.decode(body.token) as
-      | { jti?: string; exp?: number }
-      | null;
+  async revoke(@Body() body: RevokeTokenDto): Promise<{ revoked: boolean }> {
+    const decoded = this.jwtService.decode(body.token);
 
     if (!decoded?.jti || !decoded?.exp) {
       return { revoked: false };

@@ -30,6 +30,7 @@ import Redis, { type Redis as RedisClient } from 'ioredis';
 export class CacheService implements OnModuleDestroy {
   private readonly logger = new Logger(CacheService.name);
   private client: RedisClient | null = null;
+  private connected = false;
   private readonly defaultTtlSeconds: number;
 
   // Circuit breaker state for graceful degradation when Redis is unavailable.
@@ -48,24 +49,10 @@ export class CacheService implements OnModuleDestroy {
   /** Connect to Redis (Sentinel or single-node). Called by CacheModule on bootstrap. */
   async connect(): Promise<void> {
     const sentinelHosts = this.config.get<string>('REDIS_SENTINEL_HOSTS');
-    const sentinelName = this.config.get<string>('REDIS_SENTINEL_NAME') ?? 'mymaster';
+    const sentinelName =
+      this.config.get<string>('REDIS_SENTINEL_NAME') ?? 'mymaster';
     const redisUrl = this.config.get<string>('REDIS_URL');
 
-    try {
-      this.client = createClient({ url });
-      this.client.on('error', (err: Error) => {
-        this.logger.error(`Redis client error: ${err.message}`);
-        this.recordFailure();
-      });
-      await this.client.connect();
-      this.logger.log(`Connected to Redis at ${url}`);
-      this.resetCircuitBreaker();
-    } catch (err) {
-      this.logger.error(
-        `Failed to connect to Redis: ${(err as Error).message}`,
-      );
-      this.client = null;
-      this.recordFailure();
     if (sentinelHosts) {
       // ── Sentinel mode ────────────────────────────────────────────────────
       const sentinels = sentinelHosts
@@ -95,20 +82,27 @@ export class CacheService implements OnModuleDestroy {
           this.logger.error(`Redis Sentinel client error: ${err.message}`),
         );
         this.client.on('+failover-end', () =>
-          this.logger.log('Redis Sentinel: failover complete — new master elected'),
+          this.logger.log(
+            'Redis Sentinel: failover complete — new master elected',
+          ),
         );
         this.client.on('ready', () =>
-          this.logger.log(`Redis Sentinel connected to master "${sentinelName}"`),
+          this.logger.log(
+            `Redis Sentinel connected to master "${sentinelName}"`,
+          ),
         );
 
         // Wait for initial connection
         await this.client.ping();
+        this.connected = true;
+        this.resetCircuitBreaker();
         this.logger.log('Redis Sentinel connection established');
       } catch (err) {
         this.logger.error(
           `Failed to connect to Redis Sentinel: ${(err as Error).message}`,
         );
         this.client = null;
+        this.connected = false;
       }
     } else if (redisUrl) {
       // ── Single-node mode ─────────────────────────────────────────────────
@@ -128,12 +122,15 @@ export class CacheService implements OnModuleDestroy {
         );
 
         await this.client.ping();
+        this.connected = true;
+        this.resetCircuitBreaker();
         this.logger.log(`Connected to Redis at ${redisUrl}`);
       } catch (err) {
         this.logger.error(
           `Failed to connect to Redis: ${(err as Error).message}`,
         );
         this.client = null;
+        this.connected = false;
       }
     } else {
       this.logger.warn(
@@ -150,13 +147,16 @@ export class CacheService implements OnModuleDestroy {
 
   private recordFailure(): void {
     const now = Date.now();
-    if (now - this.circuitBreaker.lastFailureAt > this.circuitBreaker.windowMs) {
+    if (
+      now - this.circuitBreaker.lastFailureAt >
+      this.circuitBreaker.windowMs
+    ) {
       this.circuitBreaker.failures = 1;
     } else {
       this.circuitBreaker.failures++;
     }
     this.circuitBreaker.lastFailureAt = now;
-    if (this.circuitBreaker.failures >= this.circuitBreaker.threshold) {
+    if (this.circuitBreaker.failures > this.circuitBreaker.threshold) {
       this.circuitBreaker.open = true;
       this.logger.warn(
         `Redis circuit breaker opened after ${this.circuitBreaker.failures} failures within ${this.circuitBreaker.windowMs}ms — serving cache-miss`,
@@ -171,7 +171,7 @@ export class CacheService implements OnModuleDestroy {
   }
 
   private isCacheAvailable(): boolean {
-    if (!this.client || !this.client.isOpen) {
+    if (!this.client || !this.connected) {
       this.recordFailure();
       return false;
     }
@@ -205,8 +205,7 @@ export class CacheService implements OnModuleDestroy {
     if (!this.isCacheAvailable()) return;
     try {
       const ttl = ttlSeconds ?? this.defaultTtlSeconds;
-      await this.client!.set(key, JSON.stringify(value), { EX: ttl });
-      await this.client.set(key, JSON.stringify(value), 'EX', ttl);
+      await this.client!.set(key, JSON.stringify(value), 'EX', ttl);
     } catch (err) {
       this.logger.warn(
         `Cache SET failed for key "${key}": ${(err as Error).message}`,
@@ -222,7 +221,6 @@ export class CacheService implements OnModuleDestroy {
     if (!this.isCacheAvailable() || keys.length === 0) return;
     try {
       await this.client!.del(keys);
-      await this.client.del(...keys);
     } catch (err) {
       this.logger.warn(
         `Cache DEL failed for keys [${keys.join(', ')}]: ${(err as Error).message}`,
@@ -245,17 +243,19 @@ export class CacheService implements OnModuleDestroy {
       const keys: string[] = [];
       let cursor: string = '0';
       do {
-        const result = await this.client!.scan(cursor, {
-          MATCH: pattern,
-          COUNT: 100,
-        });
-        cursor = result.cursor;
-        keys.push(...result.keys);
+        const [nextCursor, matchedKeys] = await this.client!.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          100,
+        );
+        cursor = nextCursor;
+        keys.push(...matchedKeys);
       } while (cursor !== '0');
 
       if (keys.length > 0) {
         await this.client!.del(keys);
-        await this.client.del(...keys);
         this.logger.debug(
           `Invalidated ${keys.length} keys matching "${pattern}"`,
         );
@@ -268,9 +268,6 @@ export class CacheService implements OnModuleDestroy {
     }
   }
 
-  /** Returns true when a live Redis connection is available and circuit breaker is closed. */
-  get isConnected(): boolean {
-    return this.isCacheAvailable();
   private tagSetKey(tag: string): string {
     return `cache:tag:${tag}`;
   }
@@ -289,10 +286,10 @@ export class CacheService implements OnModuleDestroy {
     if (!this.client) return;
     const ttl = ttlSeconds ?? this.defaultTtlSeconds;
     try {
-      await this.client.set(key, JSON.stringify(value), { EX: ttl });
+      await this.client.set(key, JSON.stringify(value), 'EX', ttl);
       for (const tag of tags) {
         const tagSet = this.tagSetKey(tag);
-        await this.client.sAdd(tagSet, key);
+        await this.client.sadd(tagSet, key);
         // Tag set should never expire before its longest-lived member.
         await this.client.expire(tagSet, ttl);
       }
@@ -312,14 +309,12 @@ export class CacheService implements OnModuleDestroy {
     if (!this.client) return;
     try {
       const tagSet = this.tagSetKey(tag);
-      const keys = await this.client.sMembers(tagSet);
+      const keys = await this.client.smembers(tagSet);
       if (keys.length > 0) {
         await this.client.del(keys);
       }
       await this.client.del(tagSet);
-      this.logger.debug(
-        `Invalidated ${keys.length} keys tagged "${tag}"`,
-      );
+      this.logger.debug(`Invalidated ${keys.length} keys tagged "${tag}"`);
     } catch (err) {
       this.logger.warn(
         `Cache tag invalidation failed for tag "${tag}": ${(err as Error).message}`,
@@ -327,8 +322,8 @@ export class CacheService implements OnModuleDestroy {
     }
   }
 
-  /** Returns true when a live Redis connection is available. */
+  /** Returns true when a live Redis connection is available and circuit breaker is closed. */
   get isConnected(): boolean {
-    return this.client !== null && this.client.status === 'ready';
+    return this.isCacheAvailable();
   }
 }

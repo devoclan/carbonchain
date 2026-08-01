@@ -23,8 +23,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   // Only attach the JWT to requests aimed at our own API (relative paths
   // starting with /api, or absolute URLs containing /api/).
-  const isApiRequest =
-    req.url.startsWith('/api') || req.url.includes('/api/');
+  const isApiRequest = req.url.startsWith('/api') || req.url.includes('/api/');
 
   const token = auth.token();
 

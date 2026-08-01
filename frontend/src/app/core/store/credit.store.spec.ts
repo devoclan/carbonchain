@@ -105,9 +105,7 @@ describe('CreditStore — optimistic splitCredit', () => {
   });
 
   it('optimistically adds children and retires parent on splitCredit', async () => {
-    splitCredit.mockReturnValue(
-      of({ childCredit1: 'real-child-1', childCredit2: 'real-child-2' }),
-    );
+    splitCredit.mockReturnValue(of({ childCredit1: 'real-child-1', childCredit2: 'real-child-2' }));
 
     // Seed the store
     await TestBed.runInInjectionContext(() => store.loadOne('credit-1'));
@@ -131,9 +129,7 @@ describe('CreditStore — optimistic splitCredit', () => {
   });
 
   it('reconciles temporary IDs with real IDs on success', async () => {
-    splitCredit.mockReturnValue(
-      of({ childCredit1: 'real-child-1', childCredit2: 'real-child-2' }),
-    );
+    splitCredit.mockReturnValue(of({ childCredit1: 'real-child-1', childCredit2: 'real-child-2' }));
 
     await TestBed.runInInjectionContext(() => store.loadOne('credit-1'));
     await TestBed.runInInjectionContext(() =>
@@ -150,9 +146,7 @@ describe('CreditStore — optimistic splitCredit', () => {
   });
 
   it('rolls back optimistic update on API failure', async () => {
-    splitCredit.mockReturnValue(
-      throwError(() => new Error('Internal Server Error')),
-    );
+    splitCredit.mockReturnValue(throwError(() => new Error('Internal Server Error')));
 
     await TestBed.runInInjectionContext(() => store.loadOne('credit-1'));
     await TestBed.runInInjectionContext(() =>
@@ -327,7 +321,12 @@ describe('CreditStore — computed signals', () => {
 
   it('activeCredits filters to only Active status', async () => {
     await seed(CREDIT_A, CREDIT_B, CREDIT_C);
-    expect(store.activeCredits().map((c) => c.id).sort()).toEqual(['credit-a', 'credit-c']);
+    expect(
+      store
+        .activeCredits()
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(['credit-a', 'credit-c']);
   });
 
   it('retiredCredits filters to only Retired status', async () => {
@@ -339,7 +338,12 @@ describe('CreditStore — computed signals', () => {
     await seed(CREDIT_A, CREDIT_B, CREDIT_C);
     const grouped = store.creditsByProject();
 
-    expect(grouped.get('proj-1')?.map((c) => c.id).sort()).toEqual(['credit-a', 'credit-b']);
+    expect(
+      grouped
+        .get('proj-1')
+        ?.map((c) => c.id)
+        .sort(),
+    ).toEqual(['credit-a', 'credit-b']);
     expect(grouped.get('proj-2')?.map((c) => c.id)).toEqual(['credit-c']);
   });
 

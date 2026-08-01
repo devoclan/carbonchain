@@ -92,9 +92,7 @@ function encodeCursor(entity: CreditEntity): string {
  * Decode a cursor string back to { issuedAt, id }.
  * Returns null when the cursor is invalid/corrupt.
  */
-function decodeCursor(
-  cursor: string,
-): { issuedAt: number; id: string } | null {
+function decodeCursor(cursor: string): { issuedAt: number; id: string } | null {
   try {
     const raw = Buffer.from(cursor, 'base64url').toString('utf8');
     const sep = raw.indexOf(':');

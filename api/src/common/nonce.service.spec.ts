@@ -12,20 +12,18 @@ import { NonceService, nonceKey, NONCE_TTL_SECONDS } from './nonce.service';
 
 // ── Mock Redis client ─────────────────────────────────────────────────────────
 
-type SetOptions = { NX?: boolean; EX?: number };
-
-/** In-memory Redis stub that implements SET NX + auto-expiry. */
+/** In-memory Redis stub that implements SET NX + auto-expiry (ioredis positional args). */
 class MockRedisClient {
   private store = new Map<string, number>(); // key → expiry epoch (ms)
-  public calls: Array<{ key: string; options: SetOptions }> = [];
+  public calls: Array<{ key: string; args: Array<string | number> }> = [];
 
   /** Returns 'OK' on first write, null on subsequent writes (NX). */
   async set(
     key: string,
     _value: string,
-    options: SetOptions = {},
+    ...args: Array<string | number>
   ): Promise<'OK' | null> {
-    this.calls.push({ key, options });
+    this.calls.push({ key, args });
 
     // Expire stale keys
     const now = Date.now();
@@ -33,11 +31,12 @@ class MockRedisClient {
       if (exp <= now) this.store.delete(k);
     }
 
-    if (options.NX && this.store.has(key)) {
+    if (args.includes('NX') && this.store.has(key)) {
       return null; // key exists — NX prevents overwrite
     }
 
-    const ttlMs = (options.EX ?? 0) * 1000;
+    const exIdx = args.indexOf('EX');
+    const ttlMs = (exIdx !== -1 ? Number(args[exIdx + 1]) : 0) * 1000;
     this.store.set(key, now + ttlMs);
     return 'OK';
   }
@@ -99,8 +98,9 @@ describe('NonceService — atomic SET NX', () => {
     const svc = buildService(redis);
     await svc.consumeNonce('GADDR', '99');
     expect(redis.calls[0].key).toBe('nonce:GADDR:99');
-    expect(redis.calls[0].options.NX).toBe(true);
-    expect(redis.calls[0].options.EX).toBe(NONCE_TTL_SECONDS);
+    expect(redis.calls[0].args).toContain('NX');
+    expect(redis.calls[0].args).toContain('EX');
+    expect(redis.calls[0].args).toContain(NONCE_TTL_SECONDS);
   });
 });
 
@@ -127,9 +127,7 @@ describe('NonceService — concurrent request race (#415)', () => {
     expect(rejected).toHaveLength(CONCURRENCY - 1);
 
     for (const r of rejected) {
-      expect((r as PromiseRejectedResult).reason).toBeInstanceOf(
-        ConflictException,
-      );
+      expect(r.reason).toBeInstanceOf(ConflictException);
     }
   });
 });

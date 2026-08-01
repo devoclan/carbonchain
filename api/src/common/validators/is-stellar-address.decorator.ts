@@ -7,9 +7,7 @@ import {
 import { StrKey } from '@stellar/stellar-sdk';
 
 @ValidatorConstraint({ name: 'isStellarAddress', async: false })
-export class IsStellarAddressConstraint
-  implements ValidatorConstraintInterface
-{
+export class IsStellarAddressConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
     return typeof value === 'string' && StrKey.isValidEd25519PublicKey(value);
   }

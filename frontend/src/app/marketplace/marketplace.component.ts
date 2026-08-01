@@ -212,7 +212,10 @@ interface FilterState {
               </button>
             } @else {
               <p class="end-of-list">
-                All {{ visibleOffers().length }} listing{{ visibleOffers().length === 1 ? '' : 's' }} loaded
+                All {{ visibleOffers().length }} listing{{
+                  visibleOffers().length === 1 ? '' : 's'
+                }}
+                loaded
               </p>
             }
           </div>
@@ -292,16 +295,29 @@ interface FilterState {
         animation: shimmer 1.4s infinite;
         border-radius: 4px;
       }
-      .skeleton-cell.wide { flex: 2; }
-      .skeleton-cell.narrow { flex: 0.5; }
+      .skeleton-cell.wide {
+        flex: 2;
+      }
+      .skeleton-cell.narrow {
+        flex: 0.5;
+      }
       @keyframes shimmer {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
       }
 
       /* Table */
-      .status { color: #888; }
-      .error { color: #e53935; font-weight: 500; }
+      .status {
+        color: #888;
+      }
+      .error {
+        color: #e53935;
+        font-weight: 500;
+      }
       .offer-table {
         width: 100%;
         border-collapse: collapse;
@@ -318,8 +334,12 @@ interface FilterState {
         font-weight: 600;
         white-space: nowrap;
       }
-      .offer-row:hover { background: #fafafa; }
-      .mono { font-family: monospace; }
+      .offer-row:hover {
+        background: #fafafa;
+      }
+      .mono {
+        font-family: monospace;
+      }
       .badge {
         padding: 0.2rem 0.5rem;
         border-radius: 4px;
@@ -327,10 +347,22 @@ interface FilterState {
         text-transform: uppercase;
         font-weight: 600;
       }
-      .badge-open   { background: #e8f5e9; color: #2e7d32; }
-      .badge-filled { background: #e3f2fd; color: #1565c0; }
-      .badge-cancelled { background: #fce4ec; color: #c62828; }
-      .badge-asset  { background: #f3e5f5; color: #6a1b9a; }
+      .badge-open {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+      .badge-filled {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+      .badge-cancelled {
+        background: #fce4ec;
+        color: #c62828;
+      }
+      .badge-asset {
+        background: #f3e5f5;
+        color: #6a1b9a;
+      }
 
       /* Load More / Infinite scroll */
       .load-more-area {
@@ -360,11 +392,23 @@ interface FilterState {
         background: #4caf50;
         animation: bounce 1s infinite ease-in-out;
       }
-      .spinner-dot:nth-child(2) { animation-delay: 0.15s; }
-      .spinner-dot:nth-child(3) { animation-delay: 0.3s; }
+      .spinner-dot:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .spinner-dot:nth-child(3) {
+        animation-delay: 0.3s;
+      }
       @keyframes bounce {
-        0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
-        40% { transform: scale(1); opacity: 1; }
+        0%,
+        80%,
+        100% {
+          transform: scale(0.7);
+          opacity: 0.5;
+        }
+        40% {
+          transform: scale(1);
+          opacity: 1;
+        }
       }
 
       /* Buttons */
@@ -380,15 +424,27 @@ interface FilterState {
         outline: 2px solid #4caf50;
         outline-offset: 2px;
       }
-      .btn-primary { background: #4caf50; color: #fff; }
-      .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+      .btn-primary {
+        background: #4caf50;
+        color: #fff;
+      }
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
       .btn-outline {
         background: transparent;
         border: 1px solid #ccc;
         color: #333;
       }
-      .btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
-      .btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
+      .btn-outline:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .btn-sm {
+        padding: 0.25rem 0.65rem;
+        font-size: 0.8rem;
+      }
 
       /* Inline asset picker in table header */
       .asset-picker-inline {
@@ -422,9 +478,17 @@ export class MarketplaceComponent implements OnInit {
 
   /** Payment assets available in the asset picker when buying a credit. */
   readonly paymentAssets = [
-    { label: 'XLM',  type: 'native' as const, address: null },
-    { label: 'USDC', type: 'asset'  as const, address: 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75' },
-    { label: 'EURC', type: 'asset'  as const, address: 'GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP' },
+    { label: 'XLM', type: 'native' as const, address: null },
+    {
+      label: 'USDC',
+      type: 'asset' as const,
+      address: 'CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75',
+    },
+    {
+      label: 'EURC',
+      type: 'asset' as const,
+      address: 'GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP',
+    },
   ];
 
   filters: FilterState = {
@@ -448,7 +512,9 @@ export class MarketplaceComponent implements OnInit {
   /** Cursor for the next page; null means no more results. */
   private nextCursor: string | null = null;
 
-  readonly hasMore = computed(() => this.nextCursor !== null);
+  hasMore(): boolean {
+    return this.nextCursor !== null;
+  }
 
   readonly hasActiveFilters = computed(() => {
     const f = this.filters;
@@ -469,9 +535,7 @@ export class MarketplaceComponent implements OnInit {
     this.visibleOffers.set([]);
 
     try {
-      const result = await firstValueFrom(
-        this.api.getListingsCursor(this.buildParams()),
-      );
+      const result = await firstValueFrom(this.api.getListingsCursor(this.buildParams()));
       this.visibleOffers.set(result.data);
       this.nextCursor = result.next_cursor ?? null;
     } catch (err) {

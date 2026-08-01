@@ -59,9 +59,11 @@ export class AdminController {
    * Body: { name: string; description: string }
    */
   @Post('methodologies')
-  registerMethodology(
-    @Body() body: { name: string; description: string },
-  ): { registered: boolean; name: string; description: string } {
+  registerMethodology(@Body() body: { name: string; description: string }): {
+    registered: boolean;
+    name: string;
+    description: string;
+  } {
     return this.adminService.registerMethodology(body.name, body.description);
   }
 
@@ -71,9 +73,10 @@ export class AdminController {
    * in the transaction to prevent replay attacks.
    */
   @Get('nonce/:address')
-  getNonce(
-    @Param('address') address: string,
-  ): { address: string; nonce: number } {
+  getNonce(@Param('address') address: string): {
+    address: string;
+    nonce: number;
+  } {
     return this.adminService.getNonce(address);
   }
 
@@ -83,9 +86,9 @@ export class AdminController {
    * Body: { threshold: number }
    */
   @Post('required-approvals')
-  setRequiredApprovals(
-    @Body() body: { threshold: number },
-  ): { requiredApprovals: number } {
+  setRequiredApprovals(@Body() body: { threshold: number }): {
+    requiredApprovals: number;
+  } {
     return this.adminService.setRequiredApprovals(body.threshold);
   }
 
