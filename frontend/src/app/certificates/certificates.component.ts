@@ -3,17 +3,8 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { RetirementRecord } from '@shared';
-import { ApiService } from '../core/services/api.service';
+import { ApiService, CertificateVerification } from '../core/services/api.service';
 import { AuthService } from '../core/services/auth.service';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../environments/environment';
-
-/** On-chain verification result returned by GET /certificates/:id/verify */
-interface CertificateVerification {
-  id: string;
-  verified: boolean;
-  certificate_ipfs_hash?: string;
-}
 
 @Component({
   selector: 'app-certificates',
@@ -143,7 +134,6 @@ export class CertificatesComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
-  private readonly http = inject(HttpClient);
 
   readonly record = signal<RetirementRecord | null>(null);
   readonly loading = signal(true);
@@ -202,11 +192,7 @@ export class CertificatesComponent implements OnInit {
     this.verifyError.set(null);
     this.verification.set(null);
     try {
-      const result = await firstValueFrom(
-        this.http.get<CertificateVerification>(
-          `${environment.apiUrl}/api/v1/certificates/${id}/verify`,
-        ),
-      );
+      const result = await firstValueFrom(this.api.verifyCertificate(id));
       this.verification.set(result);
     } catch {
       this.verifyError.set('Verification failed — could not reach the API.');

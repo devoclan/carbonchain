@@ -51,6 +51,13 @@ export interface ProvenanceEvent {
   detail?: string;
 }
 
+/** On-chain verification result returned by GET /certificates/:id/verify */
+export interface CertificateVerification {
+  id: string;
+  verified: boolean;
+  certificate_ipfs_hash?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -205,6 +212,11 @@ export class ApiService {
       headers: this.authHeaders(token),
       responseType: 'blob',
     });
+  }
+
+  /** GET /certificates/:id/verify — on-chain certificate verification */
+  verifyCertificate(id: string): Observable<CertificateVerification> {
+    return this.http.get<CertificateVerification>(`${this.baseUrl}/certificates/${id}/verify`);
   }
 
   /** POST /marketplace/offer */
