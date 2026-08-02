@@ -22,7 +22,10 @@ SNAPSHOT_REAPPLIED=$(mktemp)
 trap 'rm -f "$SNAPSHOT_FORWARD" "$SNAPSHOT_REVERTED" "$SNAPSHOT_REAPPLIED"' EXIT
 
 dump_schema() {
-  pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges --no-comments
+  # pg_dump 16.x emits a random per-run \restrict/\unrestrict session token at
+  # the top and bottom of the dump — filter it out so schema diffs stay stable.
+  pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges --no-comments \
+    | grep -vE '^\\(un)?restrict '
 }
 
 echo "==> [1/3] Running all pending migrations forward"
