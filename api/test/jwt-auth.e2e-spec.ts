@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
 import request from 'supertest';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './../src/app.module';
+import { CacheService } from './../src/common/cache.service';
+import { AuthService } from './../src/auth/auth.service';
 
 /**
  * Issue #36  — Verify that state-mutating endpoints reject unauthenticated callers.
@@ -87,11 +91,6 @@ describe('JWT Auth Guard (e2e)', () => {
  */
 describe('JWT logout flow (issue #491)', () => {
   it('AuthService.logout stores jti in blocklist and isTokenRevoked returns true', async () => {
-    const { JwtService } = await import('@nestjs/jwt');
-    const { ConfigService } = await import('@nestjs/config');
-    const { CacheService } = await import('../src/common/cache.service');
-    const { AuthService } = await import('../src/auth/auth.service');
-
     // Minimal config mock
     const mockConfig = {
       get: (key: string, fallback?: unknown) => {
@@ -132,11 +131,6 @@ describe('JWT logout flow (issue #491)', () => {
   });
 
   it('AuthService.logout throws when token has no jti', async () => {
-    const { JwtService } = await import('@nestjs/jwt');
-    const { ConfigService } = await import('@nestjs/config');
-    const { CacheService } = await import('../src/common/cache.service');
-    const { AuthService } = await import('../src/auth/auth.service');
-
     const mockConfig = {
       get: (key: string, fallback?: unknown) => {
         if (key === 'JWT_SECRET') return 'test-secret-for-unit';
@@ -165,11 +159,6 @@ describe('JWT logout flow (issue #491)', () => {
   });
 
   it('verifyAndIssueToken includes jti in the signed token payload', async () => {
-    const { JwtService } = await import('@nestjs/jwt');
-    const { ConfigService } = await import('@nestjs/config');
-    const { CacheService } = await import('../src/common/cache.service');
-    const { AuthService } = await import('../src/auth/auth.service');
-
     const mockConfig = {
       get: (key: string, fallback?: unknown) => {
         if (key === 'JWT_SECRET') return 'test-secret-for-unit';

@@ -1,13 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   ForbiddenException,
+  HttpException,
   INestApplication,
   HttpStatus,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import request from 'supertest';
 import helmet from 'helmet';
 import { AppModule } from '../src/app.module';
-import { ThrottlerGuard } from '../src/common/throttler.guard';
+import {
+  ThrottlerGuard,
+  ACCOUNT_THROTTLE_KEY,
+} from '../src/common/throttler.guard';
 
 /**
  * Issue #45  — Verify Helmet security headers and CORS are applied.
@@ -112,11 +117,6 @@ describe('Security Headers (e2e)', () => {
  */
 describe('Per-account rate limiting (issue #492)', () => {
   it('ThrottlerGuard allows requests within accountLimit and blocks after', async () => {
-    const { Reflector } = await import('@nestjs/core');
-    const { ThrottlerGuard, ACCOUNT_THROTTLE_KEY } =
-      await import('../src/common/throttler.guard');
-    const { HttpException, HttpStatus } = await import('@nestjs/common');
-
     const reflector = new Reflector();
     const guard = new ThrottlerGuard(reflector);
 
@@ -154,11 +154,6 @@ describe('Per-account rate limiting (issue #492)', () => {
   });
 
   it('IP and account limits are independent — different accounts share the same IP limit', async () => {
-    const { Reflector } = await import('@nestjs/core');
-    const { ThrottlerGuard, ACCOUNT_THROTTLE_KEY } =
-      await import('../src/common/throttler.guard');
-    const { HttpException } = await import('@nestjs/common');
-
     const reflector = new Reflector();
     const guard = new ThrottlerGuard(reflector);
 
