@@ -105,8 +105,15 @@ describe('JWT logout flow (issue #491)', () => {
       signOptions: { expiresIn: '1h' },
     });
 
-    // In-memory CacheService (no Redis URL set)
-    const cacheService = new CacheService(mockConfig);
+    // In-memory CacheService so the issue #491 blocklist works without Redis.
+    const blocklist = new Map<string, boolean>();
+    const cacheService = {
+      get: jest.fn(async (key: string) => blocklist.get(key) ?? null),
+      set: jest.fn(async (key: string, value: boolean) => {
+        blocklist.set(key, value);
+      }),
+      del: jest.fn(async () => undefined),
+    } as unknown as CacheService;
 
     const mockKeypairService: any = {};
     const service = new AuthService(
