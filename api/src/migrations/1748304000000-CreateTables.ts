@@ -56,6 +56,7 @@ export class CreateTables1748304000000 implements MigrationInterface {
         "id"           VARCHAR(64)   NOT NULL,
         "project_id"   VARCHAR(64)   NOT NULL,
         "issuer"       VARCHAR(64)   NOT NULL,
+        "owner"        VARCHAR(64)   NOT NULL,
         "vintage_year" INT           NOT NULL,
         "methodology"  VARCHAR(50)   NOT NULL,
         "geography"    VARCHAR(10)   NOT NULL,
