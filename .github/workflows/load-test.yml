@@ -117,10 +117,17 @@ jobs:
             scripts/load-test/list-credits.js
         continue-on-error: true  # capture results even on threshold breach
 
+      # The write endpoints (issue/retire) need a valid JWT and, for retire, a
+      # set of pre-seeded credit IDs against a configured Stellar registry.
+      # The localhost API in this workflow has neither, so only run these when
+      # the required secrets are present (e.g. load testing a deployed API via
+      # workflow_dispatch with base_url). Otherwise they would 401/500 and
+      # fail the error-rate gate spuriously.
       - name: Run load test — POST /credits/issue
+        if: ${{ secrets.LOAD_TEST_JWT_TOKEN != '' }}
         env:
           BASE_URL: http://localhost:3000
-          JWT_TOKEN: ${{ secrets.LOAD_TEST_JWT_TOKEN || '' }}
+          JWT_TOKEN: ${{ secrets.LOAD_TEST_JWT_TOKEN }}
         run: |
           k6 run \
             --out json=scripts/load-test/results/issue-credits.json \
@@ -129,10 +136,11 @@ jobs:
         continue-on-error: true
 
       - name: Run load test — POST /credits/:id/retire
+        if: ${{ secrets.LOAD_TEST_JWT_TOKEN != '' && secrets.LOAD_TEST_CREDIT_IDS != '' }}
         env:
           BASE_URL: http://localhost:3000
-          JWT_TOKEN: ${{ secrets.LOAD_TEST_JWT_TOKEN || '' }}
-          CREDIT_IDS: ${{ secrets.LOAD_TEST_CREDIT_IDS || '' }}
+          JWT_TOKEN: ${{ secrets.LOAD_TEST_JWT_TOKEN }}
+          CREDIT_IDS: ${{ secrets.LOAD_TEST_CREDIT_IDS }}
         run: |
           k6 run \
             --out json=scripts/load-test/results/retire-credit.json \
@@ -217,13 +225,25 @@ jobs:
             # already signals threshold breach, but we also parse summary for reporting.
             PASSED=$(python3 -c "
           import json, sys
+
+          def metric_value(metrics, name, key, default):
+              m = metrics.get(name, {})
+              if not isinstance(m, dict):
+                  return default
+              # k6 --new-machine-readable-summary nests stats under 'values';
+              # the legacy --summary-export format keeps them directly on the
+              # metric. Handle both so the gate reads real numbers either way.
+              if isinstance(m.get('values'), dict):
+                  return m['values'].get(key, default)
+              return m.get(key, default)
+
           with open('$summary') as f:
               d = json.load(f)
           metrics = d.get('metrics', {})
           # Check http_req_failed rate
-          failed_rate = metrics.get('http_req_failed', {}).get('values', {}).get('rate', 0)
+          failed_rate = metric_value(metrics, 'http_req_failed', 'rate', 0)
           # Check p95 latency
-          p95 = metrics.get('http_req_duration', {}).get('values', {}).get('p(95)', 999999)
+          p95 = metric_value(metrics, 'http_req_duration', 'p(95)', 999999)
           if failed_rate >= 0.001:
               print(f'FAIL: error rate {failed_rate:.4f} >= 0.001 in $summary')
               sys.exit(1)
