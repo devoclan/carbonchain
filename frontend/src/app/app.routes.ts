@@ -7,6 +7,7 @@ import { ProjectDetailComponent } from './projects/project-detail.component';
 import { ConnectWalletComponent } from './core/components/connect-wallet.component';
 import { AdminComponent } from './admin/admin.component';
 import { OfflineComponent } from './offline/offline.component';
+import { CertificatesComponent } from './certificates/certificates.component';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
 
@@ -26,4 +27,9 @@ export const routes: Routes = [
   },
   { path: 'projects/:id', component: ProjectDetailComponent, canActivate: [authGuard] },
   { path: 'admin', component: AdminComponent, canActivate: [authGuard, adminGuard] },
+  {
+    path: 'certificates/:id',
+    component: CertificatesComponent,
+    canActivate: [authGuard],
+  },
 ];

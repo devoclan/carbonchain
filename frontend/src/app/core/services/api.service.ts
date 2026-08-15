@@ -236,9 +236,53 @@ export class ApiService {
     return this.http.get<VerifierInfo[]>(`${this.baseUrl}/verifiers`);
   }
 
+  /** GET /verifiers/min-stake */
+  getMinStake(): Observable<{ minStake: string }> {
+    return this.http.get<{ minStake: string }>(`${this.baseUrl}/verifiers/min-stake`);
+  }
+
+  /** GET /verifiers/:address/stake */
+  getVerifierStake(address: string): Observable<{ address: string; stake: string }> {
+    return this.http.get<{ address: string; stake: string }>(
+      `${this.baseUrl}/verifiers/${address}/stake`,
+    );
+  }
+
   /** GET /verifiers/:address/reputation */
   getVerifierReputation(address: string): Observable<VerifierReputation> {
     return this.http.get<VerifierReputation>(`${this.baseUrl}/verifiers/${address}/reputation`);
+  }
+
+  /**
+   * POST /verifiers/:address/stake/deposit
+   * Deposit stake on behalf of a verifier. Requires JWT.
+   */
+  depositStake(
+    address: string,
+    body: { tokenId: string; amount: string; nonce: string },
+    token: string,
+  ): Observable<{ address: string; stake: string }> {
+    return this.http.post<{ address: string; stake: string }>(
+      `${this.baseUrl}/verifiers/${address}/stake/deposit`,
+      body,
+      { headers: this.authHeaders(token) },
+    );
+  }
+
+  /**
+   * POST /verifiers/:address/stake/withdraw
+   * Withdraw unbonded stake once the 30-day unbonding period has elapsed. Requires JWT.
+   */
+  withdrawStake(
+    address: string,
+    body: { tokenId: string; nonce: string },
+    token: string,
+  ): Observable<{ withdrawn: boolean; address: string }> {
+    return this.http.post<{ withdrawn: boolean; address: string }>(
+      `${this.baseUrl}/verifiers/${address}/stake/withdraw`,
+      body,
+      { headers: this.authHeaders(token) },
+    );
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────────
@@ -322,6 +366,39 @@ export class ApiService {
     return this.http.post<{ requiredApprovals: number }>(
       `${this.baseUrl}/admin/required-approvals`,
       { threshold },
+      { headers: this.authHeaders(token) },
+    );
+  }
+
+  /**
+   * POST /admin/min-stake — update the minimum stake required to register as a verifier.
+   * Requires admin JWT.
+   */
+  setMinStake(
+    amount: string,
+    nonce: string,
+    token: string,
+  ): Observable<{ minStake: string }> {
+    return this.http.post<{ minStake: string }>(
+      `${this.baseUrl}/admin/min-stake`,
+      { amount, nonce },
+      { headers: this.authHeaders(token) },
+    );
+  }
+
+  /**
+   * POST /admin/verifiers/:address/slash — slash 10% of a verifier's stake as penalty.
+   * Requires admin JWT.
+   */
+  slashVerifier(
+    address: string,
+    creditId: string,
+    nonce: string,
+    token: string,
+  ): Observable<{ slashed: boolean; verifier: string; creditId: string }> {
+    return this.http.post<{ slashed: boolean; verifier: string; creditId: string }>(
+      `${this.baseUrl}/admin/verifiers/${address}/slash`,
+      { creditId, nonce },
       { headers: this.authHeaders(token) },
     );
   }
