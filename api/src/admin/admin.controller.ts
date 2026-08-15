@@ -73,10 +73,9 @@ export class AdminController {
    * in the transaction to prevent replay attacks.
    */
   @Get('nonce/:address')
-  getNonce(@Param('address') address: string): {
-    address: string;
-    nonce: number;
-  } {
+  getNonce(
+    @Param('address') address: string,
+  ): Promise<{ address: string; nonce: number }> {
     return this.adminService.getNonce(address);
   }
 
@@ -86,9 +85,9 @@ export class AdminController {
    * Body: { threshold: number }
    */
   @Post('required-approvals')
-  setRequiredApprovals(@Body() body: { threshold: number }): {
-    requiredApprovals: number;
-  } {
+  setRequiredApprovals(
+    @Body() body: { threshold: number },
+  ): Promise<{ requiredApprovals: number }> {
     return this.adminService.setRequiredApprovals(body.threshold);
   }
 
@@ -108,5 +107,38 @@ export class AdminController {
   @Post('unpause')
   unpause(): Promise<{ paused: boolean }> {
     return this.adminService.unpauseContract();
+  }
+
+  /**
+   * POST /admin/min-stake — update the minimum stake required to register as a verifier.
+   * Body: { amount: string; nonce: string }
+   *   - amount — new minimum in stroops (1 XLM = 10,000,000 stroops). Use "0" to disable.
+   *   - nonce  — current admin replay-protection nonce from GET /admin/nonce/:address.
+   */
+  @ApiOperation({ summary: 'Set minimum verifier stake requirement' })
+  @ApiResponse({ status: 200, description: 'Updated minimum stake' })
+  @Post('min-stake')
+  setMinStake(
+    @Body() body: { amount: string; nonce: string },
+  ): Promise<{ minStake: string }> {
+    return this.adminService.setMinStake(body.amount, body.nonce);
+  }
+
+  /**
+   * POST /admin/verifiers/:address/slash — slash 10 % of a verifier's stake as penalty
+   * for approving a credit that was later found to be fraudulent.
+   * Body: { creditId: string; nonce: string }
+   *   - creditId — the hex credit ID that triggered the slash.
+   *   - nonce    — current admin replay-protection nonce from GET /admin/nonce/:address.
+   */
+  @ApiOperation({ summary: 'Slash a verifier stake (penalty for fraudulent approval)' })
+  @ApiResponse({ status: 200, description: 'Slash applied' })
+  @ApiResponse({ status: 404, description: 'Verifier not found or no stake' })
+  @Post('verifiers/:address/slash')
+  slashVerifier(
+    @Param('address') address: string,
+    @Body() body: { creditId: string; nonce: string },
+  ): Promise<{ slashed: boolean; verifier: string; creditId: string }> {
+    return this.adminService.slashVerifier(address, body.creditId, body.nonce);
   }
 }
