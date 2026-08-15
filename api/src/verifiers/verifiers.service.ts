@@ -416,6 +416,113 @@ export class VerifiersService implements OnApplicationBootstrap {
     }
   }
 
+  // ── Staking ────────────────────────────────────────────────────────────────
+
+  /**
+   * GET /verifiers/:address/stake
+   * Returns the amount (in stroops) currently locked by this verifier.
+   */
+  async getStake(address: string): Promise<{ address: string; stake: string }> {
+    this.logger.log(`Fetching stake for verifier ${address}`);
+    try {
+      const args = [nativeToScVal(address, { type: 'address' })];
+      const retval = await this.stellarService.readContract(
+        this.contractId,
+        'get_verifier_stake',
+        args,
+      );
+      const stake: bigint = retval ? (scValToNative(retval) as bigint) : 0n;
+      return { address, stake: stake.toString() };
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to fetch stake for ${address}: ${(error as Error).message}`,
+      );
+      return { address, stake: '0' };
+    }
+  }
+
+  /**
+   * GET /verifiers/min-stake
+   * Returns the global minimum stake (in stroops) required to register as a verifier.
+   */
+  async getMinStake(): Promise<{ minStake: string }> {
+    this.logger.log('Fetching minimum stake requirement');
+    try {
+      const retval = await this.stellarService.readContract(
+        this.contractId,
+        'get_min_stake',
+        [],
+      );
+      const minStake: bigint = retval ? (scValToNative(retval) as bigint) : 0n;
+      return { minStake: minStake.toString() };
+    } catch (error: unknown) {
+      this.logger.error(`Failed to fetch min stake: ${(error as Error).message}`);
+      return { minStake: '0' };
+    }
+  }
+
+  /**
+   * POST /verifiers/:address/stake/deposit
+   * Deposits `amount` stroops of `tokenId` token as stake for the verifier.
+   *
+   * The verifier MUST sign this transaction themselves — in production this
+   * should follow the same two-phase Freighter flow as `approveCredit`. In
+   * test/admin mode the admin keypair is used as a convenience signer.
+   */
+  async depositStake(
+    address: string,
+    tokenId: string,
+    amount: string,
+    nonce: string,
+  ): Promise<{ address: string; stake: string }> {
+    const amountBig = BigInt(amount);
+    if (amountBig <= 0n) {
+      throw new Error('amount must be positive');
+    }
+    this.logger.log(
+      `Depositing stake for verifier ${address}: amount=${amount} token=${tokenId}`,
+    );
+    const args = [
+      nativeToScVal(address, { type: 'address' }),
+      nativeToScVal(tokenId, { type: 'address' }),
+      nativeToScVal(amountBig, { type: 'i128' }),
+      nativeToScVal(BigInt(nonce), { type: 'u64' }),
+    ];
+    const signer = this.keypairService.getAdminKeypair();
+    await this.stellarService.invokeContract(
+      this.contractId,
+      'deposit_stake',
+      args,
+      signer,
+    );
+    return this.getStake(address);
+  }
+
+  /**
+   * POST /verifiers/:address/stake/withdraw
+   * Withdraws the verifier's stake once the 30-day unbonding period has elapsed.
+   */
+  async withdrawStake(
+    address: string,
+    tokenId: string,
+    nonce: string,
+  ): Promise<{ withdrawn: boolean; address: string }> {
+    this.logger.log(`Withdrawing stake for verifier ${address}`);
+    const args = [
+      nativeToScVal(address, { type: 'address' }),
+      nativeToScVal(tokenId, { type: 'address' }),
+      nativeToScVal(BigInt(nonce), { type: 'u64' }),
+    ];
+    const signer = this.keypairService.getAdminKeypair();
+    await this.stellarService.invokeContract(
+      this.contractId,
+      'withdraw_stake',
+      args,
+      signer,
+    );
+    return { withdrawn: true, address };
+  }
+
   // ── Internal ──────────────────────────────────────────────────────────────
 
   /**
