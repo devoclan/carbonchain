@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { nativeToScVal } from '@stellar/stellar-sdk';
 import { AdminService } from './admin.service';
 import { CreditsService } from '../credits/credits.service';
 import { VerifiersService } from '../verifiers/verifiers.service';
@@ -193,21 +194,40 @@ describe('AdminService', () => {
   });
 
   describe('getNonce', () => {
-    it('should return a nonce object with the requested address', () => {
-      const result = service.getNonce('GADMINPUBLICKEY');
+    it('should return a nonce object with the requested address from on-chain', async () => {
+      // Mock readContract to return the nonce as a u64 ScVal.
+      // The service will call scValToNative → bigint → Number.
+      stellarService.readContract.mockResolvedValue(nativeToScVal(5n, { type: 'u64' }) as any);
+      const result = await service.getNonce('GADMINPUBLICKEY');
       expect(result.address).toBe('GADMINPUBLICKEY');
       expect(typeof result.nonce).toBe('number');
+    });
+
+    it('should fall back to nonce 0 when contract call fails', async () => {
+      stellarService.readContract.mockRejectedValue(new Error('Contract unavailable'));
+      const result = await service.getNonce('GADMINPUBLICKEY');
+      expect(result.address).toBe('GADMINPUBLICKEY');
+      expect(result.nonce).toBe(0);
     });
   });
 
   describe('setRequiredApprovals', () => {
-    it('should return the threshold that was set', () => {
-      const result = service.setRequiredApprovals(2);
+    it('should call set_required_approvals on-chain and return the threshold', async () => {
+      // First readContract call fetches the admin nonce
+      stellarService.readContract.mockResolvedValue(nativeToScVal(0n, { type: 'u64' }) as any);
+      const result = await service.setRequiredApprovals(2);
       expect(result).toEqual({ requiredApprovals: 2 });
+      expect(stellarService.invokeContract).toHaveBeenCalledWith(
+        expect.any(String),
+        'set_required_approvals',
+        expect.any(Array),
+        mockAdminKeypair,
+      );
     });
 
-    it('should return 1 when threshold is 1', () => {
-      const result = service.setRequiredApprovals(1);
+    it('should return requiredApprovals: 1 when threshold is 1', async () => {
+      stellarService.readContract.mockResolvedValue(nativeToScVal(0n, { type: 'u64' }) as any);
+      const result = await service.setRequiredApprovals(1);
       expect(result.requiredApprovals).toBe(1);
     });
   });
