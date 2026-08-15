@@ -210,7 +210,9 @@ export class AdminService {
    * Invokes `set_required_approvals` on the credit_registry contract.
    * `threshold` must be >= 1.
    */
-  async setRequiredApprovals(threshold: number): Promise<{ requiredApprovals: number }> {
+  async setRequiredApprovals(
+    threshold: number,
+  ): Promise<{ requiredApprovals: number }> {
     this.logger.log(`Setting required approvals to ${threshold}`);
     const admin = this.keypairService.getAdminKeypair();
     // Fetch the admin's current nonce atomically before building the transaction.
@@ -219,7 +221,9 @@ export class AdminService {
       'get_nonce',
       [nativeToScVal(admin.publicKey(), { type: 'address' })],
     );
-    const nonce: bigint = nonceRetval ? (scValToNative(nonceRetval) as bigint) : 0n;
+    const nonce: bigint = nonceRetval
+      ? (scValToNative(nonceRetval) as bigint)
+      : 0n;
 
     const args = [
       nativeToScVal(admin.publicKey(), { type: 'address' }),

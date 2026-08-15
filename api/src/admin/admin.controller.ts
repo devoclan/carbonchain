@@ -131,7 +131,9 @@ export class AdminController {
    *   - creditId — the hex credit ID that triggered the slash.
    *   - nonce    — current admin replay-protection nonce from GET /admin/nonce/:address.
    */
-  @ApiOperation({ summary: 'Slash a verifier stake (penalty for fraudulent approval)' })
+  @ApiOperation({
+    summary: 'Slash a verifier stake (penalty for fraudulent approval)',
+  })
   @ApiResponse({ status: 200, description: 'Slash applied' })
   @ApiResponse({ status: 404, description: 'Verifier not found or no stake' })
   @Post('verifiers/:address/slash')

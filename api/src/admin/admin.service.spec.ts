@@ -197,14 +197,18 @@ describe('AdminService', () => {
     it('should return a nonce object with the requested address from on-chain', async () => {
       // Mock readContract to return the nonce as a u64 ScVal.
       // The service will call scValToNative → bigint → Number.
-      stellarService.readContract.mockResolvedValue(nativeToScVal(5n, { type: 'u64' }) as any);
+      stellarService.readContract.mockResolvedValue(
+        nativeToScVal(5n, { type: 'u64' }),
+      );
       const result = await service.getNonce('GADMINPUBLICKEY');
       expect(result.address).toBe('GADMINPUBLICKEY');
       expect(typeof result.nonce).toBe('number');
     });
 
     it('should fall back to nonce 0 when contract call fails', async () => {
-      stellarService.readContract.mockRejectedValue(new Error('Contract unavailable'));
+      stellarService.readContract.mockRejectedValue(
+        new Error('Contract unavailable'),
+      );
       const result = await service.getNonce('GADMINPUBLICKEY');
       expect(result.address).toBe('GADMINPUBLICKEY');
       expect(result.nonce).toBe(0);
@@ -214,7 +218,9 @@ describe('AdminService', () => {
   describe('setRequiredApprovals', () => {
     it('should call set_required_approvals on-chain and return the threshold', async () => {
       // First readContract call fetches the admin nonce
-      stellarService.readContract.mockResolvedValue(nativeToScVal(0n, { type: 'u64' }) as any);
+      stellarService.readContract.mockResolvedValue(
+        nativeToScVal(0n, { type: 'u64' }),
+      );
       const result = await service.setRequiredApprovals(2);
       expect(result).toEqual({ requiredApprovals: 2 });
       expect(stellarService.invokeContract).toHaveBeenCalledWith(
@@ -226,7 +232,9 @@ describe('AdminService', () => {
     });
 
     it('should return requiredApprovals: 1 when threshold is 1', async () => {
-      stellarService.readContract.mockResolvedValue(nativeToScVal(0n, { type: 'u64' }) as any);
+      stellarService.readContract.mockResolvedValue(
+        nativeToScVal(0n, { type: 'u64' }),
+      );
       const result = await service.setRequiredApprovals(1);
       expect(result.requiredApprovals).toBe(1);
     });

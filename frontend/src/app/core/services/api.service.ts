@@ -374,11 +374,7 @@ export class ApiService {
    * POST /admin/min-stake — update the minimum stake required to register as a verifier.
    * Requires admin JWT.
    */
-  setMinStake(
-    amount: string,
-    nonce: string,
-    token: string,
-  ): Observable<{ minStake: string }> {
+  setMinStake(amount: string, nonce: string, token: string): Observable<{ minStake: string }> {
     return this.http.post<{ minStake: string }>(
       `${this.baseUrl}/admin/min-stake`,
       { amount, nonce },

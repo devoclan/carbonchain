@@ -122,8 +122,8 @@ import { StellarWalletService } from '../core/services/stellar-wallet.service';
       <section class="panel-section">
         <h2 class="section-title">Verifier Staking</h2>
         <p class="section-description">
-          Configure the minimum stake required to register a verifier, look up locked balances,
-          and slash verifiers who approved fraudulent credits.
+          Configure the minimum stake required to register a verifier, look up locked balances, and
+          slash verifiers who approved fraudulent credits.
         </p>
 
         <!-- Current minimum stake display -->
@@ -318,17 +318,13 @@ import { StellarWalletService } from '../core/services/stellar-wallet.service';
           <h2 id="slash-title">Slash Verifier Stake?</h2>
           <p class="pause-warning">
             This will permanently slash <strong>10%</strong> of verifier
-            <span class="monospace">{{ slashAddress | slice: 0 : 8 }}…</span>'s
-            locked stake as a penalty for approving fraudulent credit
-            <span class="monospace">{{ slashCreditId | slice: 0 : 12 }}…</span>.
-            The slashed funds are forfeited and cannot be recovered.
+            <span class="monospace">{{ slashAddress | slice: 0 : 8 }}…</span>'s locked stake as a
+            penalty for approving fraudulent credit
+            <span class="monospace">{{ slashCreditId | slice: 0 : 12 }}…</span>. The slashed funds
+            are forfeited and cannot be recovered.
           </p>
           <div class="modal-actions">
-            <button
-              class="btn btn-ghost"
-              (click)="closeSlashConfirm()"
-              [disabled]="isSlashing()"
-            >
+            <button class="btn btn-ghost" (click)="closeSlashConfirm()" [disabled]="isSlashing()">
               Cancel
             </button>
             <button class="btn btn-danger" (click)="confirmSlash()" [disabled]="isSlashing()">
@@ -552,9 +548,7 @@ export class AdminComponent implements OnInit {
       const nonceResp = await firstValueFrom(this.api.getAdminNonce(address, token));
       const amountStroops = Math.round(this.newMinStakeXlm * 10_000_000).toString();
 
-      await firstValueFrom(
-        this.api.setMinStake(amountStroops, nonceResp.nonce.toString(), token),
-      );
+      await firstValueFrom(this.api.setMinStake(amountStroops, nonceResp.nonce.toString(), token));
       this.minStake.set(amountStroops);
       this.newMinStakeXlm = null;
       this.toast.show(
@@ -562,9 +556,7 @@ export class AdminComponent implements OnInit {
         'success',
       );
     } catch (err) {
-      this.stakeError.set(
-        err instanceof Error ? err.message : 'Failed to update minimum stake.',
-      );
+      this.stakeError.set(err instanceof Error ? err.message : 'Failed to update minimum stake.');
     } finally {
       this.isSavingMinStake.set(false);
     }
@@ -579,9 +571,7 @@ export class AdminComponent implements OnInit {
       const result = await firstValueFrom(this.api.getVerifierStake(address));
       this.verifierStakeResult.set(result);
     } catch (err) {
-      this.stakeError.set(
-        err instanceof Error ? err.message : 'Failed to fetch verifier stake.',
-      );
+      this.stakeError.set(err instanceof Error ? err.message : 'Failed to fetch verifier stake.');
     } finally {
       this.isCheckingStake.set(false);
     }

@@ -456,7 +456,9 @@ export class VerifiersService implements OnApplicationBootstrap {
       const minStake: bigint = retval ? (scValToNative(retval) as bigint) : 0n;
       return { minStake: minStake.toString() };
     } catch (error: unknown) {
-      this.logger.error(`Failed to fetch min stake: ${(error as Error).message}`);
+      this.logger.error(
+        `Failed to fetch min stake: ${(error as Error).message}`,
+      );
       return { minStake: '0' };
     }
   }

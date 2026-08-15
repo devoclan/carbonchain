@@ -219,6 +219,10 @@ export class VerifiersController {
     if (!body.tokenId || !body.nonce) {
       throw new BadRequestException('tokenId and nonce are required');
     }
-    return this.verifiersService.withdrawStake(address, body.tokenId, body.nonce);
+    return this.verifiersService.withdrawStake(
+      address,
+      body.tokenId,
+      body.nonce,
+    );
   }
 }
