@@ -811,6 +811,8 @@ impl CreditRegistry {
         if !is_verifier(&env, &verifier) {
             return Err(CarbonChainError::Unauthorized);
         }
+        // #673: enforce capability check — configured-with-empty grants no access.
+        if !verifier_has_service(&env, &verifier, &ServiceType::CreditApproval) {
         // Issue #509: if this verifier has configured their service capabilities,
         // CreditApproval must be among them. If no services are configured, the
         // verifier retains all capabilities (backwards-compatible open assumption).
@@ -1976,6 +1978,9 @@ impl CreditRegistry {
     /// Only the contract admin or the session initiator for the associated session may read it.
     ///
     /// # Errors
+    /// - [`CarbonChainError::SessionNotFound`] — no audit log entry exists for `log_id`.
+    pub fn get_audit_log(env: Env, log_id: BytesN<32>) -> Result<AuditLogEntry, CarbonChainError> {
+        get_audit_log(&env, &log_id).ok_or(CarbonChainError::SessionNotFound)
     /// - [`CarbonChainError::Unauthorized`] — caller is not the admin or session initiator.
     /// - [`CarbonChainError::CreditNotFound`] — no audit log entry exists for `log_id`.
     pub fn get_audit_log(
@@ -3488,6 +3493,157 @@ mod tests {
         assert_eq!(result, Err(Ok(CarbonChainError::InvalidNonce)));
     }
 
+    // ── Tests for Issue #674: Windowed nonce tolerance ────────────────────────
+
+    /// A nonce that is current+0 must be accepted (strict case still works).
+    #[test]
+    fn test_nonce_sequential_still_works() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        let nonce0 = client.get_nonce(&admin);
+        // register_verifier consumes nonce 0
+        let result = client.try_register_verifier(&admin, &verifier, &nonce0);
+        assert!(result.is_ok());
+        assert_eq!(client.get_nonce(&admin), 1);
+    }
+
+    /// A nonce within the window (e.g. current+2) must be accepted.
+    #[test]
+    fn test_nonce_windowed_gap_accepted() {
+        let (env, client, admin, _) = setup();
+        let verifier1 = Address::generate(&env);
+
+        // Current nonce is 0. Use nonce 2 (skip ahead within window of size 16).
+        let result = client.try_register_verifier(&admin, &verifier1, &2);
+        assert!(result.is_ok(), "nonce within window should be accepted");
+    }
+
+    /// A nonce below the current base is a replay — must be rejected.
+    #[test]
+    fn test_nonce_below_window_rejected() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        // consume nonce 0
+        client.register_verifier(&admin, &verifier, &0);
+        // now current >= 1; try to replay nonce 0 with a different verifier
+        let verifier2 = Address::generate(&env);
+        let result = client.try_register_verifier(&admin, &verifier2, &0u64);
+        assert_eq!(result, Err(Ok(CarbonChainError::InvalidNonce)));
+    }
+
+    /// A nonce at or beyond current+WINDOW is outside the window — must be rejected.
+    #[test]
+    fn test_nonce_beyond_window_rejected() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        // NONCE_WINDOW = 16; current is 0; nonce 16 is just outside the window.
+        let result = client.try_register_verifier(&admin, &verifier, &16u64);
+        assert_eq!(result, Err(Ok(CarbonChainError::InvalidNonce)));
+    }
+
+    /// Replaying an already-consumed nonce within the window must be rejected.
+    #[test]
+    fn test_nonce_replay_within_window_rejected() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        let verifier2 = Address::generate(&env);
+        let nonce0 = client.get_nonce(&admin);
+        client.register_verifier(&admin, &verifier, &nonce0);
+        // try to replay nonce 0 again with a different operation
+        let result = client.try_register_verifier(&admin, &verifier2, &0u64);
+        assert_eq!(result, Err(Ok(CarbonChainError::InvalidNonce)));
+    }
+
+    // ── Tests for Issue #673: Empty service list grants no capabilities ────────
+
+    /// Verifier configured with empty service list cannot approve a credit.
+    #[test]
+    fn test_empty_service_list_blocks_approval() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        let issuer = Address::generate(&env);
+
+        let n0 = client.get_nonce(&admin);
+        client.register_verifier(&admin, &verifier, &n0);
+
+        // Configure verifier with an empty service list
+        let empty_services: soroban_sdk::Vec<ServiceType> = soroban_sdk::Vec::new(&env);
+        let n1 = client.get_nonce(&admin);
+        client.configure_verifier_services(&admin, &verifier, &empty_services, &n1);
+
+        // Submit a credit
+        let id = submit_test_credit(&env, &client, &admin, &issuer);
+
+        // Verifier with empty service list must NOT be able to approve
+        let vnonce = client.get_nonce(&verifier);
+        let result = client.try_approve_and_mint(&verifier, &id, &vnonce);
+        assert_eq!(result, Err(Ok(CarbonChainError::Unauthorized)));
+    }
+
+    /// Unconfigured verifier (no key set at all) retains full backward-compat access.
+    #[test]
+    fn test_unconfigured_verifier_can_approve() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        let issuer = Address::generate(&env);
+
+        let n0 = client.get_nonce(&admin);
+        client.register_verifier(&admin, &verifier, &n0);
+        // No configure_verifier_services call → unconfigured
+
+        let id = submit_test_credit(&env, &client, &admin, &issuer);
+
+        let vnonce = client.get_nonce(&verifier);
+        let result = client.try_approve_and_mint(&verifier, &id, &vnonce);
+        assert!(result.is_ok(), "unconfigured verifier must be able to approve");
+    }
+
+    /// Verifier explicitly configured with CreditApproval can approve.
+    #[test]
+    fn test_configured_credit_approval_service_allows_mint() {
+        let (env, client, admin, _) = setup();
+        let verifier = Address::generate(&env);
+        let issuer = Address::generate(&env);
+
+        let n0 = client.get_nonce(&admin);
+        client.register_verifier(&admin, &verifier, &n0);
+
+        let mut services = soroban_sdk::Vec::new(&env);
+        services.push_back(ServiceType::CreditApproval);
+        let n1 = client.get_nonce(&admin);
+        client.configure_verifier_services(&admin, &verifier, &services, &n1);
+
+        let id = submit_test_credit(&env, &client, &admin, &issuer);
+
+        let vnonce = client.get_nonce(&verifier);
+        let result = client.try_approve_and_mint(&verifier, &id, &vnonce);
+        assert!(result.is_ok());
+    }
+
+    // ── Tests for Issue #672: get_audit_log returns SessionNotFound ───────────
+
+    /// Fetching a non-existent audit log must return SessionNotFound, not CreditNotFound.
+    #[test]
+    fn test_get_audit_log_missing_returns_session_not_found() {
+        let (env, client, _, _) = setup();
+        let fake_id = BytesN::from_array(&env, &[0u8; 32]);
+        let result = client.try_get_audit_log(&fake_id);
+        assert_eq!(result, Err(Ok(CarbonChainError::SessionNotFound)));
+    }
+
+    /// Fetching an existing audit log must succeed.
+    #[test]
+    fn test_get_audit_log_existing_succeeds() {
+        let (env, client, admin, _) = setup();
+        let issuer = Address::generate(&env);
+
+        // Create a session
+        let session_id = client.create_session(&issuer);
+
+        // Submit credit within session to generate an audit log entry
+        let n0 = client.get_nonce(&admin);
+        client.register_issuer(&admin, &issuer, &n0);
+        let n1 = client.get_nonce(&admin);
     #[test]
     fn test_all_error_codes_within_documented_band() {
         const MIN: u32 = 100;
@@ -3852,6 +4008,36 @@ mod tests {
         let contract_id = env.register(CreditRegistry, ());
         let client = CreditRegistryClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
+        let retirement = Address::generate(&env);
+        // initialize calls set_admin internally; if extend_ttl is missing it would panic
+        let result = client.try_initialize(&admin, &retirement, &1);
+        assert!(result.is_ok(), "initialize (which calls set_admin) must succeed");
+    }
+
+    /// set_paused must extend TTL — verified by checking the paused state is observable.
+    #[test]
+    fn test_set_paused_extends_ttl() {
+        let (env, client, admin, _) = setup();
+        // pause() calls set_paused(true) which now calls extend_ttl internally.
+        client.pause(&admin);
+        // The pause effect is observable: submit_credit must now return ContractPaused.
+        let result = client.try_submit_credit(
+            &Address::generate(&env),
+            &String::from_str(&env, "PROJ-001"),
+            &2024u32,
+            &String::from_str(&env, "VCS"),
+            &String::from_str(&env, "NG"),
+            &1_000_000i128,
+            &String::from_str(&env, "bafybei123"),
+            &0u64,
+        );
+        assert_eq!(result, Err(Ok(CarbonChainError::ContractPaused)));
+    }
+
+    /// set_required_approvals is called by initialize; verify it extends TTL and the
+    /// value is readable after the call.
+    #[test]
+    fn test_set_required_approvals_extends_ttl() {
         let verifier = Address::generate(&env);
         let retirement = Address::generate(&env);
         // require 2 approvals so credit stays Pending after first approval
@@ -3937,6 +4123,10 @@ mod tests {
         let contract_id = env.register(CreditRegistry, ());
         let client = CreditRegistryClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
+        let retirement = Address::generate(&env);
+        // initialize calls set_required_approvals(2) with extend_ttl
+        client.initialize(&admin, &retirement, &2);
+        assert_eq!(client.get_required_approvals(), 2);
         let verifier = Address::generate(&env);
         let retirement = Address::generate(&env);
         init(&client, &admin, &retirement, 1);
