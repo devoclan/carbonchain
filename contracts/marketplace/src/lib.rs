@@ -92,8 +92,6 @@ pub enum DataKey {
     SellerOffers(Address),
     Admin,
     Paused,
-    FeeBps,
-    FeeRecipient,
     EscrowedAmount(u64),
     Nonce(Address),
     MinPrice,
