@@ -87,3 +87,4 @@ All CarbonChain smart contracts use stable numeric error codes. These codes are 
 - Error codes are **stable** — they will not change across contract upgrades.
 - All `tonnes` values use scaled units: **1 tonne = 1,000,000 units**, minimum unit = 100,000 (0.1 tonne).
 - `InvalidInput` (retirement code 118) is also returned when a `batch_retire` call exceeds `MAX_BATCH_SIZE = 20`.
+- Code 126 (`InvalidProject`) is reserved for MRV Oracle; Marketplace `AlreadyInitialized` was reassigned to 130 to avoid collision.

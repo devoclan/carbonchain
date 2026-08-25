@@ -22,6 +22,8 @@ pub const MIN_CREDIT_UNIT: i128 = 100_000;
 
 pub mod errors;
 pub mod events;
+pub mod approvals_bitmap;
+pub mod migrations;
 pub mod migrations;
 pub mod storage;
 #[cfg(feature = "testutils")]
@@ -37,6 +39,25 @@ use crate::events::{
     VerifierRemoved, VerifierServicesConfigured, VerifierSlashed,
 };
 use crate::storage::{
+    set_admin, get_admin, has_admin,
+    set_credit, get_credit,
+    get_verifiers, set_verifiers, is_verifier,
+    get_verifier_id, set_verifier_id, get_next_verifier_id, set_next_verifier_id,
+    add_credit_to_project, get_credits_by_project, get_credit_by_project_vintage, set_credit_by_project_vintage,
+    add_credit_to_owner, get_credits_by_owner, remove_credit_from_owner,
+    add_pending_credit_to_verifier, get_pending_credits_by_verifier, remove_pending_credit_from_verifier,
+    set_retirement_contract, get_retirement_contract,
+    set_paused, is_paused,
+    get_nonce, consume_nonce,
+    get_verifier_reputation,
+    increment_approval_count, increment_dispute_count,
+    get_issuers, set_issuers, is_issuer as storage_is_issuer,
+    get_methodologies, set_methodologies, is_methodology_valid,
+    get_verifier_pending_count, increment_verifier_pending, decrement_verifier_pending,
+    get_required_approvals, set_required_approvals,
+    get_credit_approvals, set_credit_approvals, remove_credit_approvals,
+    set_session, get_session, get_session_op_count, increment_session_op_count,
+    append_audit_log, get_audit_log,
     add_credit_to_owner, add_credit_to_project, add_to_pending_credits, append_audit_log,
     consume_nonce, consume_session_count, decrement_verifier_pending, get_admin, get_audit_log,
     get_credit, get_credit_approvals, get_credit_by_project_vintage, get_credit_verifiers,
@@ -88,12 +109,11 @@ impl CreditRegistry {
         if required_approvals == 0 {
             return Err(CarbonChainError::InvalidApprovalThreshold);
         }
-        // Validate that admin is a legitimate, authorised address.
-        // require_auth() will panic for zero/invalid addresses in the Soroban VM.
         admin.require_auth();
         set_admin(&env, &admin);
         set_retirement_contract(&env, &retirement_contract);
         set_required_approvals(&env, required_approvals);
+        let _ = run_migrations(&env);
         crate::storage::set_version(&env, crate::migrations::CURRENT_VERSION);
         ContractInitialized {
             admin: admin.clone(),
@@ -169,6 +189,9 @@ impl CreditRegistry {
         if is_verifier(&env, &verifier) {
             return Err(CarbonChainError::VerifierAlreadyExists);
         }
+        let id = get_next_verifier_id(&env);
+        set_next_verifier_id(&env, id + 1);
+        set_verifier_id(&env, &verifier, id);
         // Issue #565: verifier must have locked at least the minimum stake (via
         // `deposit_stake`) before the admin can register them — this gives approvals
         // economic backing so a malicious verifier has capital at risk.
@@ -657,6 +680,7 @@ impl CreditRegistry {
         set_credit_by_project_vintage(&env, &project_id, vintage_year, &id);
         add_credit_to_project(&env, &project_id, &id);
         add_credit_to_owner(&env, &issuer, &id);
+
         // Issue #541: track total credits ever issued for O(1) count reads.
         increment_total_credits(&env);
 
@@ -666,6 +690,7 @@ impl CreditRegistry {
         let verifiers = get_verifiers(&env);
         set_credit_verifiers(&env, &id, &verifiers);
         for v in verifiers.iter() {
+            add_pending_credit_to_verifier(&env, &v, &id);
             increment_verifier_pending(&env, &v);
         }
         // Track this credit in the global pending list so remove_verifier can
@@ -713,22 +738,22 @@ impl CreditRegistry {
             return Err(CarbonChainError::InvalidStatusTransition);
         }
 
-        // Check this verifier hasn't already approved this credit.
-        let mut approvals = get_credit_approvals(&env, &credit_id);
-        if approvals.contains(&verifier) {
+        let verifier_id = get_verifier_id(&env, &verifier).ok_or(CarbonChainError::Unauthorized)?;
+        if has_approved(&get_credit_approvals(&env, &credit_id), verifier_id) {
             return Err(CarbonChainError::AlreadyApproved);
         }
-        approvals.push_back(verifier.clone());
-        set_credit_approvals(&env, &credit_id, &approvals);
+        mark_approved(&env, &credit_id, verifier_id);
         increment_approval_count(&env, &verifier);
 
         let required = get_required_approvals(&env);
-        if approvals.len() >= required {
-            // Threshold reached — mint the credit.
+        if count_approvals(&get_credit_approvals(&env, &credit_id)) >= required {
             credit.status = CreditStatus::Active;
             set_credit(&env, &credit_id, &credit);
-            remove_credit_approvals(&env, &credit_id);
+            clear_approvals(&env, &credit_id);
 
+            let verifiers = get_verifiers(&env);
+            for v in verifiers.iter() {
+                remove_pending_credit_from_verifier(&env, &v, &credit_id);
             // Issue #481: decrement pending count only for verifiers assigned to THIS
             // credit (the snapshot taken at submit time), not for all current verifiers.
             // This prevents over-decrement when new verifiers are added after submission,
@@ -748,7 +773,6 @@ impl CreditRegistry {
             }
             .publish(&env);
         } else {
-            // Not yet at threshold — save updated approvals list, no status change.
             set_credit(&env, &credit_id, &credit);
         }
         Ok(())
@@ -756,7 +780,7 @@ impl CreditRegistry {
 
     /// Returns the current approval count for a pending credit.
     pub fn get_approval_count(env: Env, credit_id: BytesN<32>) -> u32 {
-        get_credit_approvals(&env, &credit_id).len()
+        count_approvals(&get_credit_approvals(&env, &credit_id))
     }
 
     /// Returns the required number of approvals to mint a credit.
@@ -968,6 +992,9 @@ impl CreditRegistry {
         remove_credit_from_owner(&env, &from, &credit_id);
         credit.owner = to.clone();
         set_credit(&env, &credit_id, &credit);
+        remove_credit_from_owner(&env, &from, &credit_id);
+        add_credit_to_owner(&env, &to, &credit_id);
+        CreditTransferred { from, to, credit_id }.publish(&env);
         // Add to the new owner's index.
         add_credit_to_owner(&env, &to, &credit_id);
         CreditTransferred {
@@ -1064,6 +1091,9 @@ impl CreditRegistry {
         // Retire original credit
         original.status = CreditStatus::Retired;
         set_credit(&env, &credit_id, &original);
+        remove_credit_from_owner(&env, &caller, &credit_id);
+
+        CreditSplit { original_id: credit_id, child1_id: child1_id.clone(), child2_id: child2_id.clone() }.publish(&env);
         CreditSplit {
             original_id: credit_id,
             child1_id: child1_id.clone(),
@@ -3335,6 +3365,53 @@ mod tests {
     }
 
     #[test]
+    fn test_all_error_codes_within_documented_band() {
+        const MIN: u32 = 100;
+        const MAX: u32 = 126;
+        let variants = [
+            CarbonChainError::NotInitialized,
+            CarbonChainError::AlreadyInitialized,
+            CarbonChainError::Unauthorized,
+            CarbonChainError::InvalidMetadata,
+            CarbonChainError::CreditNotFound,
+            CarbonChainError::InvalidStatusTransition,
+            CarbonChainError::VerifierAlreadyExists,
+            CarbonChainError::VerifierNotFound,
+            CarbonChainError::InsufficientBalance,
+            CarbonChainError::Overflow,
+            CarbonChainError::InvalidTonnes,
+            CarbonChainError::InvalidAdmin,
+            CarbonChainError::ContractPaused,
+            CarbonChainError::IssuerNotAllowed,
+            CarbonChainError::InvalidMethodology,
+            CarbonChainError::InvalidNonce,
+            CarbonChainError::NoPendingAdmin,
+            CarbonChainError::InvalidSplit,
+            CarbonChainError::InvalidDisputeStatus,
+            CarbonChainError::VerifierHasPendingCredits,
+            CarbonChainError::ProjectNotFound,
+            CarbonChainError::DuplicateCredit,
+            CarbonChainError::ProjectAlreadyExists,
+            CarbonChainError::SessionNotFound,
+            CarbonChainError::InvalidApprovalThreshold,
+            CarbonChainError::AlreadyApproved,
+        ];
+        for v in variants.iter() {
+            let code = *v as u32;
+            assert!(
+                code >= MIN && code <= MAX,
+                "CarbonChainError code {} is outside documented band {}-{}",
+                code,
+                MIN,
+                MAX
+            );
+        }
+    }
+
+    #[test]
+    fn test_migration_round_trip() {
+        let env = Env::default();
+        env.mock_all_auths();
     fn test_submit_credit_issuer_not_allowed() {
         let (env, client, admin, _) = setup();
         let anonce = client.get_nonce(&admin);
@@ -3544,6 +3621,18 @@ mod tests {
         let client = CreditRegistryClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let retirement = Address::generate(&env);
+        client.initialize(&admin, &retirement, &1);
+        let version: u32 = env.storage().instance().get(&crate::types::DataKey::ContractVersion).unwrap_or(0);
+        assert!(version >= 2);
+    }
+
+    #[test]
+    fn test_owner_and_pending_index_bounded() {
+        let (env, client, admin, _) = setup();
+        let issuer = Address::generate(&env);
+        let anonce = client.get_nonce(&admin);
+        client.register_issuer(&admin, &issuer, &anonce);
+        let anonce_meth = client.get_nonce(&admin);
         init(&client, &admin, &retirement, 1);
         let issuer = Address::generate(&env);
         let anonce = client.get_nonce(&admin);
@@ -3553,6 +3642,36 @@ mod tests {
             &admin,
             &String::from_str(&env, "VCS"),
             &String::from_str(&env, "Verified Carbon Standard"),
+            &anonce_meth,
+        );
+        client.register_project(
+            &admin,
+            &String::from_str(&env, "PROJ-STRESS"),
+            &String::from_str(&env, "Stress"),
+            &String::from_str(&env, "Desc"),
+            &String::from_str(&env, "NG"),
+        );
+        let mut ids = Vec::new(&env);
+        for i in 0..25u32 {
+            let nonce = client.get_nonce(&issuer);
+            let id = client.submit_credit(
+                &issuer,
+                &String::from_str(&env, "PROJ-STRESS"),
+                &2024,
+                &String::from_str(&env, "VCS"),
+                &String::from_str(&env, "NG"),
+                &1_000_000,
+                &String::from_str(&env, "ipfs"),
+                &nonce,
+            );
+            ids.push_back(id);
+        }
+        let owner_credits = client.get_credits_by_owner(&issuer);
+        assert!(owner_credits.len() <= 20);
+    }
+
+    #[test]
+    fn test_approval_bitmap_duplicate_approval_rejected() {
             &anonce2,
         );
         client.register_project(
@@ -3595,6 +3714,8 @@ mod tests {
         client.register_verifier(&admin, &verifier, &nonce);
         let issuer = Address::generate(&env);
         let id = submit_test_credit(&env, &client, &admin, &issuer);
+        let vnonce = client.get_nonce(&verifier);
+        client.approve_and_mint(&verifier, &id, &vnonce);
         let result = client.try_approve_and_mint(&verifier, &id, &99);
         assert_eq!(result, Err(Ok(CarbonChainError::InvalidNonce)));
     }
