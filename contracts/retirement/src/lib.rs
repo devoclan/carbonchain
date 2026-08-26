@@ -676,6 +676,49 @@ impl Retirement {
         out
     }
 
+    /// Attach an IPFS / off-chain certificate hash to an existing retirement record.
+    ///
+    /// Only the admin may call this. The retirement record identified by
+    /// `retirement_id` must already exist; if it does not, this returns
+    /// [`RetirementError::RecordNotFound`] (not `CreditNotActive`) — #689.
+    ///
+    /// # Errors
+    /// - [`RetirementError::NotInitialized`] — contract has not been initialised.
+    /// - [`RetirementError::Unauthorized`] — caller is not the admin.
+    /// - [`RetirementError::RecordNotFound`] — no retirement record exists for `retirement_id`.
+    pub fn set_certificate_hash(
+        env: Env,
+        admin: Address,
+        retirement_id: BytesN<32>,
+        hash: String,
+    ) -> Result<(), RetirementError> {
+        Self::require_admin(&env, &admin)?;
+        // #689: use RecordNotFound when the retirement record does not exist
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Retirement(retirement_id.clone()))
+        {
+            return Err(RetirementError::RecordNotFound);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::CertificateHash(retirement_id.clone()), &hash);
+        env.storage().persistent().extend_ttl(
+            &DataKey::CertificateHash(retirement_id),
+            TTL_THRESHOLD,
+            MIN_TTL,
+        );
+        Ok(())
+    }
+
+    /// Retrieve the certificate hash for a retirement record, if one has been set.
+    pub fn get_certificate_hash(env: Env, retirement_id: BytesN<32>) -> Option<String> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CertificateHash(retirement_id))
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), RetirementError> {
