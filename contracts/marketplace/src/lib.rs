@@ -179,6 +179,15 @@ pub struct OfferUpdated {
     pub new_price_xlm: i128,
 }
 
+#[contractevent]
+#[derive(Clone)]
+pub struct OfferFilled {
+    pub buyer: Address,
+    pub seller: Address,
+    pub offer_id: u64,
+    pub price_xlm: i128,
+}
+
 // ── Contract ─────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -273,11 +282,12 @@ impl Marketplace {
     /// # Errors
     /// - [`MarketplaceError::ContractPaused`] — contract is paused.
     /// - [`MarketplaceError::InvalidNonce`] — `nonce` does not match the current seller nonce.
-    /// - [`MarketplaceError::InvalidPrice`] — `price_xlm` is zero or negative.
+    /// - [`MarketplaceError::InvalidPrice`] — `price_xlm` is zero or negative. (#696)
     /// - [`MarketplaceError::InvalidTonnes`] — `tonnes` is zero, negative, or not a multiple of 100_000.
     /// - [`MarketplaceError::InvalidRegistry`] — `registry_id` does not match the trusted registry (#692).
     /// - [`MarketplaceError::CreditNotFound`] — credit does not exist in the registry (#690).
     /// - [`MarketplaceError::CreditNotActive`] — credit is not in `Active` status.
+    /// - [`MarketplaceError::EscrowFailed`] — escrow transfer did not complete (contract does not own credit). (#693)
     pub fn create_offer(
         env: Env,
         seller: Address,
@@ -620,11 +630,95 @@ impl Marketplace {
         Ok(())
     }
 
+    /// Purchase an active offer. Transfers the credit from escrow to the buyer.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::ContractPaused`] — contract is paused.
+    /// - [`MarketplaceError::InvalidNonce`] — `nonce` does not match the current buyer nonce.
+    /// - [`MarketplaceError::OfferNotFound`] — no offer exists for `offer_id`.
+    /// - [`MarketplaceError::AlreadyClosed`] — offer is no longer active.
+    /// - [`MarketplaceError::OfferExpired`] — offer has expired.
+    /// - [`MarketplaceError::InvalidPrice`] — `price_xlm` is zero or negative. (#696)
+    pub fn buy_offer(
+        env: Env,
+        buyer: Address,
+        offer_id: u64,
+        registry_id: Address,
+        nonce: u64,
+    ) -> Result<(), MarketplaceError> {
+        if Self::is_paused(&env) {
+            return Err(MarketplaceError::ContractPaused);
+        }
+        buyer.require_auth();
+        if !Self::consume_nonce(&env, &buyer, nonce) {
+            return Err(MarketplaceError::InvalidNonce);
+        }
+
+        let mut offer: Offer = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Offer(offer_id))
+            .ok_or(MarketplaceError::OfferNotFound)?;
+
+        if !offer.active {
+            return Err(MarketplaceError::AlreadyClosed);
+        }
+
+        // Check expiry
+        if let Some(expires_at) = offer.expires_at {
+            if env.ledger().timestamp() > expires_at {
+                offer.active = false;
+                env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
+                // #694: prune from active index on expiry detected during buy
+                remove_from_active_index(&env, offer_id);
+                return Err(MarketplaceError::OfferExpired);
+            }
+        }
+
+        // #696: InvalidPrice — price must be positive (defensive guard)
+        if offer.price_xlm <= 0 {
+            return Err(MarketplaceError::InvalidPrice);
+        }
+
+        let escrow_account: Address = env.current_contract_address();
+
+        // Transfer credit from escrow to buyer
+        let registry_nonce: u64 = env.invoke_contract(
+            &registry_id,
+            &Symbol::new(&env, "get_nonce"),
+            (escrow_account.clone(),).into_val(&env),
+        );
+        let _: () = env.invoke_contract(
+            &registry_id,
+            &Symbol::new(&env, "transfer_credit"),
+            (
+                escrow_account.clone(),
+                buyer.clone(),
+                offer.credit_id.clone(),
+                registry_nonce,
+            )
+                .into_val(&env),
+        );
+
+        // Mark offer closed and clean up
+        let seller = offer.seller.clone();
+        offer.active = false;
+        env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
+        env.storage().persistent().extend_ttl(&DataKey::Offer(offer_id), TTL_THRESHOLD, MIN_TTL);
+        env.storage().persistent().remove(&DataKey::EscrowedAmount(offer_id));
+
+        // #694: prune from active index on buy
+        remove_from_active_index(&env, offer_id);
+
+        OfferFilled { buyer, seller, offer_id, price_xlm: offer.price_xlm }.publish(&env);
+        Ok(())
+    }
+
     /// Fetch an offer by its ID.
     ///
     /// # Errors
     /// - [`MarketplaceError::OfferNotFound`] — no offer exists for `offer_id`.
-    /// - [`MarketplaceError::OfferExpired`] — offer has expired (also marks it inactive).
+    /// - [`MarketplaceError::OfferExpired`] — offer has expired (also marks it inactive and prunes index).
     pub fn get_offer(env: Env, offer_id: u64) -> Result<Offer, MarketplaceError> {
         let offer: Offer = env
             .storage()
@@ -686,6 +780,9 @@ impl Marketplace {
 
     /// Clean up expired offers starting from `start_id`, processing at most `limit` offers (capped at 100).
     ///
+    /// Marks expired offers inactive **and** removes them from the `ActiveOffers` index
+    /// so that `list_active_offers` remains sub-linear in the total offer count. (#695)
+    ///
     /// # Errors
     /// - [`MarketplaceError::NotInitialized`] / [`MarketplaceError::Unauthorized`] — caller is not admin.
     pub fn cleanup_expired_offers(
@@ -700,6 +797,12 @@ impl Marketplace {
         let effective_limit = if limit > 100 { 100 } else { limit };
         let end = (start_id + effective_limit as u64).min(count);
 
+        // Load the active index once; mutate in-place then write back. (#695)
+        let mut active_ids: Vec<u64> = env.storage().persistent()
+            .get(&DataKey::ActiveOffers)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut index_changed = false;
+
         for i in start_id..end {
             if let Some(mut offer) = env
                 .storage()
@@ -710,10 +813,23 @@ impl Marketplace {
                     if now > expires_at && offer.active {
                         offer.active = false;
                         env.storage().persistent().set(&DataKey::Offer(i), &offer);
+
+                        // #695: Compact ActiveOffers — remove the expired ID from the index
+                        if let Some(pos) = active_ids.iter().position(|id| id == i) {
+                            active_ids.remove(pos as u32);
+                            index_changed = true;
+                        }
                     }
                 }
             }
         }
+
+        // Persist the compacted index only if it changed
+        if index_changed {
+            env.storage().persistent().set(&DataKey::ActiveOffers, &active_ids);
+            env.storage().persistent().extend_ttl(&DataKey::ActiveOffers, TTL_THRESHOLD, MIN_TTL);
+        }
+
         Ok(())
     }
 
@@ -746,7 +862,7 @@ impl Marketplace {
     /// - [`MarketplaceError::Unauthorized`] — caller is not the original seller.
     /// - [`MarketplaceError::AlreadyClosed`] — offer is inactive.
     /// - [`MarketplaceError::OfferExpired`] — offer has expired.
-    /// - [`MarketplaceError::InvalidPrice`] — new price is zero, negative, or below min_price.
+    /// - [`MarketplaceError::InvalidPrice`] — new price is zero, negative, or below min_price. (#696)
     pub fn update_offer_price(
         env: Env,
         seller: Address,
@@ -777,6 +893,7 @@ impl Marketplace {
                 return Err(MarketplaceError::OfferExpired);
             }
         }
+        // #696: InvalidPrice for zero/negative price in update path
         if new_price_xlm <= 0 {
             return Err(MarketplaceError::InvalidPrice);
         }
@@ -964,6 +1081,8 @@ impl Marketplace {
     /// Filters out expired offers before returning.
     ///
     /// `page` is 0-indexed. `page_size` is clamped to 50.
+    /// Because `ActiveOffers` is pruned on every cancel/buy/expiry/cleanup,
+    /// this read is O(page_size) not O(total offers). (#694)
     pub fn list_active_offers(env: Env, page: u32, page_size: u32) -> Vec<u64> {
         let page_size = page_size.min(50) as usize;
         let all: Vec<u64> = env
@@ -1105,7 +1224,7 @@ impl Marketplace {
         get_nonce(&env, &address)
     }
 
-    // ── Issue 3: Contract Upgrade Mechanism ──────────────────────────────────
+    // ── Contract Upgrade ─────────────────────────────────────────────────────
 
     /// Upgrade the contract WASM to a new hash. Only the admin may call this.
     ///
@@ -1756,9 +1875,7 @@ mod tests {
             client.try_get_offer(&offer_id),
             Err(Ok(MarketplaceError::OfferExpired))
         );
-        // Offer must now be inactive in storage (fetch raw via persistent)
-        // We read it back by calling get_offer again — still expired, but active is false
-        // Verify it no longer appears in get_active_offers_by_seller
+        // Offer must now be inactive — no longer in active_offers listing
         assert_eq!(client.get_active_offers_by_seller(&seller).len(), 0);
     }
 
