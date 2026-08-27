@@ -42,6 +42,7 @@ export class RetirementController {
   @ApiResponse({ status: 201, description: 'Credit retired successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @UseGuards(JwtAuthGuard)
+  @Idempotent()
   @Post()
   retire(
     @Body() dto: RetirementRequestDto,
@@ -63,6 +64,7 @@ export class RetirementController {
   @ApiResponse({ status: 429, description: 'Too Many Requests' })
   @Throttle({ limit: 5, ttl: 60000 })
   @UseGuards(JwtAuthGuard, ThrottlerGuard)
+  @Idempotent()
   @Post('batch')
   batchRetire(@Body() dto: BatchRetireDto): Promise<BatchRetireResult> {
     return this.retirementService.batchRetire(dto);

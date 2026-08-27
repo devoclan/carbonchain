@@ -205,6 +205,26 @@ export class ThrottlerGuard implements CanActivate {
     }
 
     const key = `${ip}:${req.path}`;
+    if (this.cache?.isConnected) {
+      try {
+        const key = `throttle:${ip}:${req.path}`;
+        const count = await this.cache.increment(
+          key,
+          Math.ceil(options.ttl / 1000),
+        );
+        if (count > options.limit) {
+          throw new HttpException(
+            'Too Many Requests',
+            HttpStatus.TOO_MANY_REQUESTS,
+          );
+        }
+        return true;
+      } catch (error) {
+        if (error instanceof HttpException) throw error;
+        this.logger.warn('Redis throttling unavailable; using memory fallback');
+      }
+    }
+
     const now = Date.now();
     const record = this.store.get(key);
 

@@ -1,5 +1,6 @@
 import { Entity, PrimaryColumn, Column, Index } from 'typeorm';
 import { CreditStatus } from '../../../shared';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity('credits')
 @Index('idx_credits_status_methodology_geography', [
